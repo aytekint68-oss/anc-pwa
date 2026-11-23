@@ -14,16 +14,16 @@
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { margin: 0; background: var(--bg); color: var(--text); padding-bottom: 40px; }
     header { background: linear-gradient(135deg, #1e3a8a, #1d4ed8); color: #fff; padding: 22px 16px; text-align: center; box-shadow: 0 2px 10px rgba(0,0,0,0.12); }
-    header h1 { margin: 0; font-size: 1.3rem; }
-    header p { margin: 4px 0 0; font-size: 0.85rem; opacity: 0.9; }
+    header h1 { margin: 0; font-size: 1.28rem; display: flex; align-items: center; justify-content: center; gap: 10px; }
+    header p { margin: 5px 0 0; font-size: 0.85rem; opacity: 0.9; }
     .container { max-width: 480px; margin: 16px auto; padding: 0 14px; }
     .tabs { display: flex; background: #e2e8f0; border-radius: 12px; padding: 4px; margin-bottom: 16px; }
     .tab { flex: 1; text-align: center; padding: 10px; font-weight: 600; font-size: 0.9rem; border-radius: 9px; cursor: pointer; color: #475569; transition: 0.2s; }
     .tab.active { background: #fff; color: var(--primary); box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
     .card { background: var(--card); border-radius: 14px; padding: 18px; box-shadow: 0 4px 12px rgba(15,23,42,0.06); margin-bottom: 16px; }
     label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px; color: #334155; }
-    input, select { width: 100%; padding: 12px; border: 1.5px solid #cbd5e1; border-radius: 10px; font-size: 1rem; margin-bottom: 14px; background: #fff; }
-    input:focus, select:focus { outline: none; border-color: var(--primary); }
+    input { width: 100%; padding: 12px; border: 1.5px solid #cbd5e1; border-radius: 10px; font-size: 1rem; margin-bottom: 14px; background: #fff; }
+    input:focus { outline: none; border-color: var(--primary); }
     button { width: 100%; padding: 13px; border: none; border-radius: 10px; font-size: 1rem; font-weight: 700; cursor: pointer; background: var(--primary); color: #fff; transition: 0.2s; }
     button:active { transform: scale(0.98); }
     .btn-success { background: #16a34a; margin-top: 10px; display: inline-block; text-align: center; text-decoration: none; color: #fff; padding: 11px; border-radius: 9px; font-weight: 600; width: 100%; }
@@ -42,7 +42,7 @@
 <body>
 
 <header>
-  <h1 id="appTitle" style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+  <h1 id="appTitle">
     <svg width="26" height="18" viewBox="0 0 3 2" style="border-radius: 3px; box-shadow: 0 1px 4px rgba(0,0,0,0.35); flex-shrink: 0;">
       <rect width="1" height="2" x="0" fill="#002B7F"/>
       <rect width="1" height="2" x="1" fill="#FCD116"/>
@@ -74,23 +74,17 @@
 
   <!-- 1. MANUEL SORGULAMA SEKMESİ -->
   <div id="panel-sorgu" class="card">
-    <label>Dosya Numarası (Örn: 12345/2023)</label>
+    <label>Dosya Numarası (Örn: 12345/2023 veya 11470/RD/2026)</label>
     <input type="text" id="sorguNo" placeholder="12345/2023" inputmode="text" />
 
     <button onclick="dosyaSorgula()">Dosyayı Sorgula</button>
     <div id="sorguSonuc"></div>
   </div>
 
-  <!-- 2. OTOMATİK BİLDİRİM TAKİBİ SEKMESİ -->
+  <!-- 2. OTOMATİK BİLDİRİM TAKİBİ SEKMESİ (Sadece Dosya No/Yıl) -->
   <div id="panel-takip" class="card hidden">
-    <label>Takip Edilecek Madde</label>
-    <select id="takipMadde">
-      <option value="Madde 11">Madde 11 (Articolul 11)</option>
-      <option value="Madde 10">Madde 10 (Articolul 10)</option>
-    </select>
-
-    <label>Dosya Numaranız</label>
-    <input type="text" id="takipNo" placeholder="12345/2023" />
+    <label>Dosya Numaranız (Örn: 12345/2023)</label>
+    <input type="text" id="takipNo" placeholder="12345/2023" inputmode="text" />
 
     <!-- Gizli Admin Kodu Alanı (Başlığa 5 kez dokununca açılır) -->
     <div id="adminBox" class="hidden">
@@ -203,7 +197,6 @@
 
   async function bildirimAc() {
     const no = document.getElementById("takipNo").value.trim();
-    const madde = document.getElementById("takipMadde").value;
     const adminKodu = document.getElementById("adminKodu").value.trim();
     const kutu = document.getElementById("takipSonuc");
 
@@ -235,7 +228,6 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           dosya_no: no,
-          madde: madde,
           subscription: subscription.toJSON(),
           admin_kodu: adminKodu
         })
@@ -273,24 +265,24 @@
 
     let html = `<label>📋 Bu Telefonda Takip Edilen Dosyalar</label>`;
     data.kayitlar.forEach((k) => {
-      const durum = k.onaylandi ? "✅ Onaylandı" : "⏳ Bekliyor";
+      const durum = k.onaylandi ? `✅ Onaylandı (${k.madde || ""})` : `⏳ Bekliyor (${k.madde || "Otomatik"})`;
       html += `
         <div class="takip-item">
-          <div><strong>${k.dosya_no}</strong> (${k.madde})<br/><small>${durum}</small></div>
-          <button class="sil-btn" onclick="takipSil('${k.dosya_no}', '${k.madde}')">Sil</button>
+          <div><strong>${k.dosya_no}</strong><br/><small>${durum}</small></div>
+          <button class="sil-btn" onclick="takipSil('${k.dosya_no}')">Sil</button>
         </div>`;
     });
     alan.innerHTML = html;
   }
 
-  async function takipSil(dosyaNo, madde) {
+  async function takipSil(dosyaNo) {
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
     if (!sub) return;
     await fetch("/api/abonelik-sil", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dosya_no: dosyaNo, madde: madde, endpoint: sub.endpoint })
+      body: JSON.stringify({ dosya_no: dosyaNo, endpoint: sub.endpoint })
     });
     listeyiYenile();
   }
