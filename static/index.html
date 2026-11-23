@@ -218,7 +218,7 @@
   </div>
 
   <div id="panel-sorgu" class="card">
-    <label>Dosya Numarası (Örn: 12345/2023 veya 11470/RD/2026)</label>
+    <label>Dosya Numarası (Örn: 12345/2023)</label>
     <input type="text" id="sorguNo" placeholder="12345/2023" inputmode="text" />
     <button onclick="dosyaSorgula()">Dosyayı Sorgula</button>
     <div id="sorguSonuc"></div>
@@ -233,7 +233,7 @@
       <input type="password" id="adminKodu" placeholder="Sadece sistem yöneticisi için" />
     </div>
 
-    <button onclick="kvkkOnayAc()">🔔 Bildirimleri Aç ve Takibe Al</button>
+    <button onclick="kvkkOnayAc()">🔔 Dosyayı Takibe Al</button>
     <div id="takipSonuc"></div>
     <div id="kayitliListem"></div>
   </div>
@@ -476,7 +476,6 @@
       return;
     }
 
-    // Mükerrer takip kontrolü (Admin kodu girilmediyse)
     if (!adminKodu) {
       const mevcut = await dosyaTakipteMi(no);
       if (mevcut) {
