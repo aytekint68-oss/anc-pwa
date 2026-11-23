@@ -209,7 +209,7 @@
   let deferredPrompt;
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
-    if (!isMobile) return; // PC'den açanlara "Uygulamayı Telefonuna Yükle" butonunu gösterme
+    if (!isMobile) return;
     deferredPrompt = e;
     document.getElementById("androidInstallBox").classList.remove("hidden");
   });
@@ -351,7 +351,8 @@
         body: JSON.stringify({
           dosya_no: no,
           subscription: subscription.toJSON(),
-          admin_kodu: adminKodu
+          admin_kodu: adminKodu,
+          cihaz_turu: isMobile ? "mobil" : "pc"
         })
       });
       const sonuc = await res.json();
@@ -385,7 +386,8 @@
       return;
     }
 
-    let html = `<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0;"><label>📋 Bu Telefonda Takip Edilen Dosyalar</label>`;
+    const listeBasligi = isMobile ? "📋 Bu Telefonda Takip Edilen Dosyalar" : "📋 Bu Bilgisayarda Takip Edilen Dosyalar";
+    let html = `<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0;"><label>${listeBasligi}</label>`;
     data.kayitlar.forEach((k) => {
       const durum = k.onaylandi ? `✅ Onaylandı (${k.madde || ""})` : `⏳ Bekliyor (${k.madde || "Otomatik"})`;
       html += `
