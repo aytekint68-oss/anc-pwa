@@ -197,8 +197,11 @@
 </div>
 
 <script>
-  const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+  const ua = window.navigator.userAgent.toLowerCase();
+  const isIos = /iphone|ipad|ipod/.test(ua);
+  const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/.test(ua);
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
   if (isIos && !isStandalone) {
     document.getElementById("iosGuide").style.display = "block";
   }
@@ -206,6 +209,7 @@
   let deferredPrompt;
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
+    if (!isMobile) return; // PC'den açanlara "Uygulamayı Telefonuna Yükle" butonunu gösterme
     deferredPrompt = e;
     document.getElementById("androidInstallBox").classList.remove("hidden");
   });
