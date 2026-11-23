@@ -42,17 +42,28 @@ def _dosya_varyasyonlari(temiz_no: str) -> list:
     temiz_no = temiz_no.strip().upper()
     varyasyonlar = {temiz_no}
 
-    # Örn: 11470/2026 -> 11470/RD/2026
     m1 = re.match(r"^(\d+)\s*/\s*(\d{4})$", temiz_no)
     if m1:
         varyasyonlar.add(f"{m1.group(1)}/RD/{m1.group(2)}")
 
-    # Örn: 11470/RD/2026 -> 11470/2026
     m2 = re.match(r"^(\d+)\s*/\s*RD\s*/\s*(\d{4})$", temiz_no)
     if m2:
         varyasyonlar.add(f"{m2.group(1)}/{m2.group(2)}")
 
     return list(varyasyonlar)
+
+
+def _dinamik_sorgu_olustur(koleksiyon_adi: str, aday_numaralar: list) -> dict:
+    """
+    Koleksiyondaki ilk kaydın tüm sütun isimlerini okur ve dosya numarasını
+    bütün sütunlarda (sütun adı ne olursa olsun) arayan MongoDB sorgusunu üretir.
+    """
+    ornek = db[koleksiyon_adi].find_one({}, {"_id": 0})
+    if not ornek:
+        return {"dosya_no": {"$in": aday_numaralar}}
+
+    alanlar = list(ornek.keys())
+    return {"$or": [{alan: {"$in": aday_numaralar}} for alan in alanlar]}
 
 
 def _dosya_maddesini_tespit_et(temiz_no: str) -> str:
@@ -64,32 +75,21 @@ def _dosya_maddesini_tespit_et(temiz_no: str) -> str:
 
     aday_numaralar = _dosya_varyasyonlari(temiz_no)
 
-    # 1. Önce 518K kayıtlı stadiu_dosar koleksiyonunda ara
+    # 1. Önce stadiu_dosar koleksiyonunda ara
     if "stadiu_dosar" in db.list_collection_names():
-        # İlk kayıttan alan adlarını dinamik oku (dosya no ve pdf sütunu)
-        ornek = db["stadiu_dosar"].find_one({}, {"_id": 0})
-        if ornek:
-            alanlar = list(ornek.keys())
-            sorgu_or = [{alan: {"$in": aday_numaralar}} for alan in alanlar]
-            kayit = db["stadiu_dosar"].find_one({"$or": sorgu_or}, {"_id": 0})
-            if kayit:
-                tum_degerler = " ".join(str(v) for v in kayit.values()).lower()
-                if "art-11" in tum_degerler or "articolul 11" in tum_degerler or "madde 11" in tum_degerler:
-                    return "Madde 11"
-                if "art-10" in tum_degerler or "articolul 10" in tum_degerler or "madde 10" in tum_degerler:
-                    return "Madde 10"
+        sorgu = _dinamik_sorgu_olustur("stadiu_dosar", aday_numaralar)
+        kayit = db["stadiu_dosar"].find_one(sorgu, {"_id": 0})
+        if kayit:
+            tum_degerler = " ".join(str(v) for v in kayit.values()).lower()
+            if "art-11" in tum_degerler or "articolul 11" in tum_degerler or "madde 11" in tum_degerler:
+                return "Madde 11"
+            if "art-10" in tum_degerler or "articolul 10" in tum_degerler or "madde 10" in tum_degerler:
+                return "Madde 10"
 
     # 2. Onaylanan karar tablolarında zaten varsa oradan tespit et
-    karar_sorgu = {
-        "$or": [
-            {"dosya_no": {"$in": aday_numaralar}},
-            {"Dosya_No": {"$in": aday_numaralar}},
-            {"dosya": {"$in": aday_numaralar}}
-        ]
-    }
-    if db["kararlar_m11"].find_one(karar_sorgu):
+    if db["kararlar_m11"].find_one(_dinamik_sorgu_olustur("kararlar_m11", aday_numaralar)):
         return "Madde 11"
-    if db["kararlar_m10"].find_one(karar_sorgu):
+    if db["kararlar_m10"].find_one(_dinamik_sorgu_olustur("kararlar_m10", aday_numaralar)):
         return "Madde 10"
 
     return "Otomatik"
@@ -130,24 +130,35 @@ async def dosya_sorgula(dosya_no: str):
         raise HTTPException(status_code=400, detail="Lütfen geçerli bir dosya numarası girin.")
 
     aday_numaralar = _dosya_varyasyonlari(temiz_no)
-    sorgu_filtresi = {
-        "$or": [
-            {"dosya_no": {"$in": aday_numaralar}},
-            {"Dosya_No": {"$in": aday_numaralar}},
-            {"dosya": {"$in": aday_numaralar}}
-        ]
-    }
 
     bulunanlar = []
     for madde_adi, kol_adi in [("Madde 11", "kararlar_m11"), ("Madde 10", "kararlar_m10")]:
+        sorgu_filtresi = _dinamik_sorgu_olustur(kol_adi, aday_numaralar)
         kayitlar = list(db[kol_adi].find(sorgu_filtresi, {"_id": 0}))
         for kayit in kayitlar:
+            # Sütun adı ne olursa olsun PDF adı, tarih ve linki esnek çek
+            pdf_adi = "-"
+            tarih = "-"
+            pdf_url = ""
+            for k, v in kayit.items():
+                k_low = k.lower()
+                v_str = str(v).strip()
+                if not v_str:
+                    continue
+                if any(x in k_low for x in ["pdf", "ordin", "belge", "dosya_adi", "dosya adi", "kaynak"]):
+                    if not v_str.startswith("http"):
+                        pdf_adi = v_str
+                if "tarih" in k_low or "date" in k_low:
+                    tarih = v_str
+                if v_str.startswith("http"):
+                    pdf_url = v_str
+
             bulunanlar.append({
                 "dosya_no": temiz_no,
                 "madde": madde_adi,
-                "pdf_adi": kayit.get("pdf_adi") or kayit.get("dosya_adi") or kayit.get("Ordin") or "Karar PDF",
-                "tarih": kayit.get("tarih") or kayit.get("Tarih") or kayit.get("karar_tarihi") or "-",
-                "pdf_url": kayit.get("pdf_url") or kayit.get("link") or kayit.get("url") or ""
+                "pdf_adi": pdf_adi,
+                "tarih": tarih,
+                "pdf_url": pdf_url
             })
 
     if not bulunanlar:
