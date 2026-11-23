@@ -61,9 +61,6 @@ def _dinamik_sorgu_olustur(koleksiyon_adi: str, aday_numaralar: list) -> dict:
 
 
 def _alan_degeri_oku(kayit: dict, anahtar_kelimeler: list, haric_kelimeler: list = None) -> str:
-    """
-    Kayıt içerisindeki sütun isimlerine bakarak eşleşen ilk dolu değeri döndürür.
-    """
     if not kayit:
         return ""
     haric_kelimeler = haric_kelimeler or []
@@ -79,9 +76,6 @@ def _alan_degeri_oku(kayit: dict, anahtar_kelimeler: list, haric_kelimeler: list
 
 
 def _stadiu_detay_analiz_et(temiz_no: str) -> dict:
-    """
-    stadiu_dosar ve stadiu_dosar_eski tablolarından tüm dosya detaylarını ve Termen değişimini çıkarır.
-    """
     sonuc = {
         "kayit_var": False,
         "resmi_no": temiz_no.upper(),
@@ -118,21 +112,18 @@ def _stadiu_detay_analiz_et(temiz_no: str) -> dict:
 
     sonuc["kayit_var"] = True
 
-    # Tablodaki tam dosya numarasını bul (Örn: 23805/RD/2025)
     for k, v in aktif_kayit.items():
         v_str = str(v).strip().upper()
         if v_str in aday_numaralar:
             sonuc["resmi_no"] = v_str
             break
 
-    # Madde tespiti
     tum_degerler = " ".join(str(v) for v in aktif_kayit.values()).lower()
     if "art-11" in tum_degerler or "articolul 11" in tum_degerler or "madde 11" in tum_degerler:
         sonuc["madde"] = "Madde 11"
     elif "art-10" in tum_degerler or "articolul 10" in tum_degerler or "madde 10" in tum_degerler:
         sonuc["madde"] = "Madde 10"
 
-    # Başvuru Tarihi (Data Înregistrării / Başvuru / Data)
     basvuru = _alan_degeri_oku(
         aktif_kayit,
         ["basvuru", "başvuru", "inregistr", "înregistr", "data", "tarih"],
@@ -141,7 +132,6 @@ def _stadiu_detay_analiz_et(temiz_no: str) -> dict:
     if basvuru:
         sonuc["basvuru_tarihi"] = basvuru
 
-    # Termen
     guncel_termen = _alan_degeri_oku(guncel_kayit, ["termen"])
     eski_termen = _alan_degeri_oku(eski_kayit, ["termen"])
 
@@ -156,15 +146,12 @@ def _stadiu_detay_analiz_et(temiz_no: str) -> dict:
     if guncel_termen and eski_termen and guncel_termen != eski_termen and guncel_termen != "-":
         sonuc["termen_degisti"] = True
 
-    # Solutie (Kurum Notu)
     solutie = _alan_degeri_oku(aktif_kayit, ["solutie", "soluție", "not", "durum", "stadiu"])
     if solutie:
         sonuc["solutie"] = solutie
 
-    # Kaynak PDF
     kaynak = _alan_degeri_oku(aktif_kayit, ["kaynak", "pdf", "dosya_adi", "dosya adi", "source", "belge"])
     if not kaynak:
-        # Sütun adı farklıysa içinde .pdf geçen değeri yakala
         for v in aktif_kayit.values():
             v_str = str(v).strip()
             if ".pdf" in v_str.lower():
@@ -290,6 +277,7 @@ async def abone_ol(veri: AbonelikIstegi):
     is_pc = (veri.cihaz_turu == "pc")
     cihaz_ek = "bilgisayarınıza" if is_pc else "telefonunuza"
     bu_cihaz = "bu bilgisayara" if is_pc else "bu telefona"
+    bu_cihazda = "bu bilgisayarda" if is_pc else "bu telefonda"
 
     is_admin = (veri.admin_kodu == ADMIN_SECRET) and (ADMIN_SECRET != "")
 
@@ -310,31 +298,55 @@ async def abone_ol(veri: AbonelikIstegi):
     if not temiz_no:
         raise HTTPException(status_code=400, detail="Lütfen takip edilecek dosya numarasını girin.")
 
+    aday_numaralar = _dosya_varyasyonlari(temiz_no)
+
+    # Mükerrer takip kontrolü (12345/2025 veya 12345/RD/2025 varyasyonları dahil)
+    mevcut_kayit = db["pwa_abonelikleri"].find_one({
+        "subscription.endpoint": endpoint,
+        "$or": [
+            {"dosya_no": {"$in": aday_numaralar}},
+            {"dosya_varyasyonlari": {"$in": aday_numaralar}}
+        ]
+    })
+
+    if mevcut_kayit:
+        if is_admin and not mevcut_kayit.get("is_admin"):
+            db["pwa_abonelikleri"].update_one(
+                {"_id": mevcut_kayit["_id"]},
+                {"$set": {"is_admin": True, "subscription": veri.subscription}}
+            )
+            return {
+                "status": "ok",
+                "zaten_kayitli": True,
+                "mesaj": f"ℹ️ {mevcut_kayit.get('dosya_no', temiz_no)} numaralı dosya zaten {bu_cihazda} takip listesinde kayıtlı! [Admin Yetkisi Eklendi]"
+            }
+
+        return {
+            "status": "ok",
+            "zaten_kayitli": True,
+            "mesaj": f"ℹ️ {mevcut_kayit.get('dosya_no', temiz_no)} numaralı dosya zaten {bu_cihazda} bildirim takibinde! Karar çıktığında {cihaz_ek} anında bildirim gelecek."
+        }
+
     tespit_edilen_madde = _dosya_maddesini_tespit_et(temiz_no)
 
-    filtre = {
-        "subscription.endpoint": endpoint,
-        "dosya_no": temiz_no
+    yeni_belge = {
+        "dosya_no": temiz_no,
+        "dosya_varyasyonlari": aday_numaralar,
+        "madde": tespit_edilen_madde,
+        "subscription": veri.subscription,
+        "is_admin": is_admin,
+        "genel_bildirim": True,
+        "cihaz_turu": veri.cihaz_turu,
+        "onaylandi": False,
+        "kayit_tarihi": datetime.now(TSI).strftime("%d.%m.%Y %H:%M")
     }
-    guncelleme = {
-        "$set": {
-            "dosya_no": temiz_no,
-            "dosya_varyasyonlari": _dosya_varyasyonlari(temiz_no),
-            "madde": tespit_edilen_madde,
-            "subscription": veri.subscription,
-            "is_admin": is_admin,
-            "genel_bildirim": True,
-            "cihaz_turu": veri.cihaz_turu,
-            "onaylandi": False,
-            "kayit_tarihi": datetime.now(TSI).strftime("%d.%m.%Y %H:%M")
-        }
-    }
-    db["pwa_abonelikleri"].update_one(filtre, guncelleme, upsert=True)
+    db["pwa_abonelikleri"].insert_one(yeni_belge)
 
     madde_bilgi = f" ({tespit_edilen_madde} olarak tespit edildi)" if tespit_edilen_madde != "Otomatik" else " (Madde 10 & 11 Otomatik Tarama)"
     ek_not = " [Admin Aktif]" if is_admin else ""
     return {
         "status": "ok",
+        "zaten_kayitli": False,
         "mesaj": f"✅ {temiz_no}{madde_bilgi} takibe alındı! Karar çıktığında {cihaz_ek} anında bildirim gelecek.{ek_not}"
     }
 
