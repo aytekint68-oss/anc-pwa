@@ -37,9 +37,6 @@ class AbonelikSilIstegi(BaseModel):
 
 
 def _dosya_varyasyonlari(temiz_no: str) -> list:
-    """
-    Kullanıcı '11470/2026' yazsa da '11470/RD/2026' yazsa da her iki formatı üretir.
-    """
     temiz_no = temiz_no.strip().upper()
     varyasyonlar = {temiz_no}
 
@@ -55,10 +52,6 @@ def _dosya_varyasyonlari(temiz_no: str) -> list:
 
 
 def _dinamik_sorgu_olustur(koleksiyon_adi: str, aday_numaralar: list) -> dict:
-    """
-    Koleksiyondaki ilk kaydın tüm sütun isimlerini okur ve dosya numarasını
-    bütün sütunlarda (sütun adı ne olursa olsun) arayan MongoDB sorgusunu üretir.
-    """
     ornek = db[koleksiyon_adi].find_one({}, {"_id": 0})
     if not ornek:
         return {"dosya_no": {"$in": aday_numaralar}}
@@ -67,32 +60,38 @@ def _dinamik_sorgu_olustur(koleksiyon_adi: str, aday_numaralar: list) -> dict:
     return {"$or": [{alan: {"$in": aday_numaralar}} for alan in alanlar]}
 
 
-def _termen_degerini_bul(kayit: dict) -> str:
+def _alan_degeri_oku(kayit: dict, anahtar_kelimeler: list, haric_kelimeler: list = None) -> str:
     """
-    Kayıt içerisinden 'Termen' sütunundaki tarihi dinamik olarak okur.
+    Kayıt içerisindeki sütun isimlerine bakarak eşleşen ilk dolu değeri döndürür.
     """
     if not kayit:
         return ""
+    haric_kelimeler = haric_kelimeler or []
     for k, v in kayit.items():
-        if "termen" in k.lower():
+        k_low = str(k).lower()
+        if any(h in k_low for h in haric_kelimeler):
+            continue
+        if any(a in k_low for a in anahtar_kelimeler):
             deger = str(v).strip()
-            if deger and deger.lower() not in ["nan", "none", "null", "-"]:
+            if deger and deger.lower() not in ["nan", "none", "null", ""]:
                 return deger
     return ""
 
 
-def _stadiu_ve_termen_analiz_et(temiz_no: str) -> dict:
+def _stadiu_detay_analiz_et(temiz_no: str) -> dict:
     """
-    stadiu_dosar ve stadiu_dosar_eski tablolarını karşılaştırarak:
-    - Dosyanın maddesini (Madde 10 / Madde 11)
-    - Güncel Termen tarihini
-    - Eski Termen tarihini ve değişip değişmediğini tespit eder.
+    stadiu_dosar ve stadiu_dosar_eski tablolarından tüm dosya detaylarını ve Termen değişimini çıkarır.
     """
     sonuc = {
+        "kayit_var": False,
+        "resmi_no": temiz_no.upper(),
         "madde": "Otomatik",
-        "guncel_termen": "",
+        "basvuru_tarihi": "-",
+        "guncel_termen": "-",
         "eski_termen": "",
-        "termen_degisti": False
+        "termen_degisti": False,
+        "solutie": "-",
+        "kaynak_pdf": "-"
     }
     if db is None:
         return sonuc
@@ -114,27 +113,71 @@ def _stadiu_ve_termen_analiz_et(temiz_no: str) -> dict:
         )
 
     aktif_kayit = guncel_kayit or eski_kayit
-    if aktif_kayit:
-        tum_degerler = " ".join(str(v) for v in aktif_kayit.values()).lower()
-        if "art-11" in tum_degerler or "articolul 11" in tum_degerler or "madde 11" in tum_degerler:
-            sonuc["madde"] = "Madde 11"
-        elif "art-10" in tum_degerler or "articolul 10" in tum_degerler or "madde 10" in tum_degerler:
-            sonuc["madde"] = "Madde 10"
+    if not aktif_kayit:
+        return sonuc
 
-    guncel_termen = _termen_degerini_bul(guncel_kayit)
-    eski_termen = _termen_degerini_bul(eski_kayit)
+    sonuc["kayit_var"] = True
 
-    sonuc["guncel_termen"] = guncel_termen
-    sonuc["eski_termen"] = eski_termen
+    # Tablodaki tam dosya numarasını bul (Örn: 23805/RD/2025)
+    for k, v in aktif_kayit.items():
+        v_str = str(v).strip().upper()
+        if v_str in aday_numaralar:
+            sonuc["resmi_no"] = v_str
+            break
 
-    if guncel_termen and eski_termen and guncel_termen != eski_termen:
+    # Madde tespiti
+    tum_degerler = " ".join(str(v) for v in aktif_kayit.values()).lower()
+    if "art-11" in tum_degerler or "articolul 11" in tum_degerler or "madde 11" in tum_degerler:
+        sonuc["madde"] = "Madde 11"
+    elif "art-10" in tum_degerler or "articolul 10" in tum_degerler or "madde 10" in tum_degerler:
+        sonuc["madde"] = "Madde 10"
+
+    # Başvuru Tarihi (Data Înregistrării / Başvuru / Data)
+    basvuru = _alan_degeri_oku(
+        aktif_kayit,
+        ["basvuru", "başvuru", "inregistr", "înregistr", "data", "tarih"],
+        haric_kelimeler=["termen", "solutie", "soluție", "update", "guncel"]
+    )
+    if basvuru:
+        sonuc["basvuru_tarihi"] = basvuru
+
+    # Termen
+    guncel_termen = _alan_degeri_oku(guncel_kayit, ["termen"])
+    eski_termen = _alan_degeri_oku(eski_kayit, ["termen"])
+
+    if guncel_termen:
+        sonuc["guncel_termen"] = guncel_termen
+    elif eski_termen:
+        sonuc["guncel_termen"] = eski_termen
+
+    if eski_termen:
+        sonuc["eski_termen"] = eski_termen
+
+    if guncel_termen and eski_termen and guncel_termen != eski_termen and guncel_termen != "-":
         sonuc["termen_degisti"] = True
+
+    # Solutie (Kurum Notu)
+    solutie = _alan_degeri_oku(aktif_kayit, ["solutie", "soluție", "not", "durum", "stadiu"])
+    if solutie:
+        sonuc["solutie"] = solutie
+
+    # Kaynak PDF
+    kaynak = _alan_degeri_oku(aktif_kayit, ["kaynak", "pdf", "dosya_adi", "dosya adi", "source", "belge"])
+    if not kaynak:
+        # Sütun adı farklıysa içinde .pdf geçen değeri yakala
+        for v in aktif_kayit.values():
+            v_str = str(v).strip()
+            if ".pdf" in v_str.lower():
+                kaynak = v_str
+                break
+    if kaynak:
+        sonuc["kaynak_pdf"] = kaynak
 
     return sonuc
 
 
 def _dosya_maddesini_tespit_et(temiz_no: str) -> str:
-    analiz = _stadiu_ve_termen_analiz_et(temiz_no)
+    analiz = _stadiu_detay_analiz_et(temiz_no)
     if analiz["madde"] != "Otomatik":
         return analiz["madde"]
 
@@ -183,6 +226,7 @@ async def dosya_sorgula(dosya_no: str):
         raise HTTPException(status_code=400, detail="Lütfen geçerli bir dosya numarası girin.")
 
     aday_numaralar = _dosya_varyasyonlari(temiz_no)
+    stadiu_detay = _stadiu_detay_analiz_et(temiz_no)
 
     bulunanlar = []
     for madde_adi, kol_adi in [("Madde 11", "kararlar_m11"), ("Madde 10", "kararlar_m10")]:
@@ -206,7 +250,7 @@ async def dosya_sorgula(dosya_no: str):
                     pdf_url = v_str
 
             bulunanlar.append({
-                "dosya_no": temiz_no,
+                "dosya_no": stadiu_detay["resmi_no"] if stadiu_detay["kayit_var"] else temiz_no.upper(),
                 "madde": madde_adi,
                 "pdf_adi": pdf_adi,
                 "tarih": tarih,
@@ -214,21 +258,10 @@ async def dosya_sorgula(dosya_no: str):
             })
 
     if not bulunanlar:
-        analiz = _stadiu_ve_termen_analiz_et(temiz_no)
-        madde_notu = f" ({analiz['madde']} kapsamında işlemde)" if analiz["madde"] != "Otomatik" else ""
-        mesaj = f"{temiz_no}{madde_notu} numaralı dosya henüz onaylanan karar listelerinde yer almıyor."
-
-        if analiz["termen_degisti"]:
-            mesaj += (
-                f"<br/><br/>📅 <strong>Termen Tarihi Güncellendi!</strong><br/>"
-                f"Eski Termen: <del>{analiz['eski_termen']}</del> &rarr; Yeni Termen: <strong>{analiz['guncel_termen']}</strong>"
-            )
-        elif analiz["guncel_termen"]:
-            mesaj += f"<br/><br/>📅 <strong>Mevcut Termen Tarihi:</strong> {analiz['guncel_termen']}"
-
         return {
             "bulundu": False,
-            "mesaj": mesaj
+            "detay": stadiu_detay,
+            "mesaj": "Dosyanız henüz resmi Karar (Ordin) listelerinde yayımlanmamıştır."
         }
 
     ilk = bulunanlar[0]
@@ -239,6 +272,7 @@ async def dosya_sorgula(dosya_no: str):
         "pdf_adi": ilk["pdf_adi"],
         "tarih": ilk["tarih"],
         "pdf_url": ilk["pdf_url"],
+        "detay": stadiu_detay,
         "tum_sonuclar": bulunanlar
     }
 
