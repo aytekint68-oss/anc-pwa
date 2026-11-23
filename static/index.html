@@ -74,6 +74,34 @@
       font-size: 0.74rem;
     }
 
+    /* Sadece Mobil Ekranlarda Alt Boşluğu Dengeleme */
+    @media (max-width: 600px) {
+      body {
+        display: flex;
+        flex-direction: column;
+        min-height: 100dvh;
+        padding-bottom: 12px;
+      }
+      header { padding: 18px 14px; }
+      .container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding-top: 16px;
+      }
+      .tabs { margin-bottom: 16px; }
+      .tab { padding: 11px; }
+      .card { padding: 18px 16px; margin-bottom: 16px; }
+      input { padding: 13px 12px; margin-bottom: 14px; }
+      button { padding: 14px; }
+      .legal-footer {
+        margin-top: auto;
+        padding: 13px 14px;
+        font-size: 0.73rem;
+        line-height: 1.48;
+      }
+    }
+
     /* KVKK Modal Stilleri */
     .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 9999; backdrop-filter: blur(2px); }
     .modal-box { background: #fff; border-radius: 16px; max-width: 420px; width: 100%; padding: 20px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25); animation: popIn 0.18s ease-out; }
@@ -121,7 +149,7 @@
 
   <!-- 1. MANUEL SORGULAMA SEKMESİ -->
   <div id="panel-sorgu" class="card">
-    <label>Dosya Numarası (Örn: 12345/2023 veya 11470/RD/2026)</label>
+    <label>Dosya Numarası (Örn: 12345/2023)</label>
     <input type="text" id="sorguNo" placeholder="12345/2023" inputmode="text" />
 
     <button onclick="dosyaSorgula()">Dosyayı Sorgula</button>
