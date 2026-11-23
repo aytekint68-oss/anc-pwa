@@ -42,6 +42,34 @@
     button:active { transform: scale(0.98); }
 
     .btn-success { background: #16a34a; margin-top: 8px; display: inline-block; text-align: center; text-decoration: none; color: #fff; padding: 9px; border-radius: 8px; font-weight: 600; width: 100%; font-size: 0.88rem; }
+    .btn-takibe-aktar {
+      background: #eff6ff;
+      border: 1.5px solid #93c5fd;
+      color: var(--primary);
+      padding: 9px 10px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      margin-top: 8px;
+      cursor: pointer;
+      width: 100%;
+      text-align: center;
+      display: block;
+    }
+    .btn-takibe-aktar:hover { background: #dbeafe; }
+
+    .takipte-rozet {
+      background: #dcfce7;
+      border: 1px solid #86efac;
+      color: #166534;
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 0.81rem;
+      font-weight: 600;
+      margin-top: 8px;
+      text-align: center;
+    }
+
     .alert { padding: 11px 12px; border-radius: 9px; font-size: 0.84rem; margin-top: 10px; line-height: 1.45; }
     .alert-ok { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
     .alert-warn { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
@@ -289,6 +317,49 @@
     if (ad === "takip") listeyiYenile();
   }
 
+  function bildirimTakibineAktar(dosyaNo) {
+    sekmeAc("takip");
+    const takipInput = document.getElementById("takipNo");
+    takipInput.value = dosyaNo;
+    takipInput.focus();
+  }
+
+  // Dosya numarasının /RD/ içerip içermemesine göre eşleşme kontrolü
+  function dosyaVaryasyonlariUret(no) {
+    const temiz = no.trim().toUpperCase();
+    const set = new Set([temiz]);
+    const m1 = temiz.match(/^(\d+)\s*\/\s*(\d{4})$/);
+    if (m1) set.add(`${m1[1]}/RD/${m1[2]}`);
+    const m2 = temiz.match(/^(\d+)\s*\/\s*RD\s*\/\s*(\d{4})$/);
+    if (m2) set.add(`${m2[1]}/${m2[2]}`);
+    return Array.from(set);
+  }
+
+  async function dosyaTakipteMi(dosyaNo) {
+    try {
+      if (!("serviceWorker" in navigator)) return false;
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (!sub) return false;
+
+      const res = await fetch("/api/takip-listem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ endpoint: sub.endpoint })
+      });
+      const data = await res.json();
+      if (!data.kayitlar || data.kayitlar.length === 0) return false;
+
+      const adaylar = dosyaVaryasyonlariUret(dosyaNo);
+      return data.kayitlar.some((k) => {
+        const kayitAdaylari = dosyaVaryasyonlariUret(k.dosya_no || "");
+        return kayitAdaylari.some((ka) => adaylar.includes(ka));
+      });
+    } catch (e) {
+      return false;
+    }
+  }
+
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js");
   }
@@ -308,18 +379,19 @@
     }
     kutu.innerHTML = `<div class="alert alert-warn">⏳ Dosya durumu ve karar listeleri taranıyor...</div>`;
     try {
-      const res = await fetch(`/api/sorgula?dosya_no=${encodeURIComponent(no)}`);
+      const [res, takipte] = await Promise.all([
+        fetch(`/api/sorgula?dosya_no=${encodeURIComponent(no)}`),
+        dosyaTakipteMi(no)
+      ]);
       const data = await res.json();
       const d = data.detay || {};
       const gosterilenNo = d.resmi_no || data.dosya_no || no.toUpperCase();
 
-      // Termen satırı (değişmişse eski -> yeni göster)
       let termenMetni = d.guncel_termen || "-";
       if (d.termen_degisti && d.eski_termen) {
         termenMetni = `<del style="color:#64748b;">${d.eski_termen}</del> &rarr; <strong style="color:#b45309;">${d.guncel_termen}</strong> <span style="font-size:0.75rem; background:#fef3c7; color:#92400e; padding:1px 5px; border-radius:4px;">Güncellendi</span>`;
       }
 
-      // Üst kısım: Stadiu Dosar detayları (varsa)
       let ustBilgiHtml = "";
       if (d.kayit_var) {
         ustBilgiHtml = `
@@ -342,7 +414,6 @@
         `;
       }
 
-      // Alt kısım: Karar (Ordin) Durumu
       let kararHtml = "";
       if (data.bulundu) {
         const liste = data.tum_sonuclar || [data];
@@ -358,13 +429,17 @@
             </div>`;
         }).join("");
       } else {
+        const guvenliNo = gosterilenNo.replace(/'/g, "\\'");
+        const cihazAdi = isMobile ? "bu telefonda" : "bu bilgisayarda";
+        const takipAltHtml = takipte
+          ? `<div class="takipte-rozet">✅ Bu dosya zaten ${cihazAdi} bildirim takibinde. Karar çıktığında anında bildirim alacaksınız.</div>`
+          : `<button type="button" class="btn-takibe-aktar" onclick="bildirimTakibineAktar('${guvenliNo}')">🔔 ${gosterilenNo} Dosyasını Bildirim Takibine Al &rarr;</button>`;
+
         kararHtml = `
           <div class="karar-durum-bekliyor">
             ❌ 🔴 Dosyanız henüz resmi Karar (Ordin) listelerinde yayımlanmamıştır.
           </div>
-          <div style="font-size:0.78rem; color:#475569; margin-top:6px;">
-            💡 <strong>Bildirim Takibi</strong> sekmesinden dosyanızı kaydederek karar çıktığı an bildirim alabilirsiniz.
-          </div>
+          ${takipAltHtml}
         `;
       }
 
