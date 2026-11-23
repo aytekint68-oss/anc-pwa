@@ -107,8 +107,7 @@
 
     <button onclick="kvkkOnayAc()">🔔 Bildirimleri Aç ve Takibe Al</button>
     <div id="takipSonuc"></div>
-
-    <div id="kayitliListem" style="margin-top: 18px;"></div>
+    <div id="kayitliListem"></div>
   </div>
 
   <!-- Reklam / Sponsorluk / Duyuru Alanı -->
@@ -242,7 +241,6 @@
     const adminKodu = document.getElementById("adminKodu").value.trim();
     const kutu = document.getElementById("takipSonuc");
 
-    // Sadece admin cihaz kaydı yapılıyorsa KVKK modalına gerek duymadan doğrudan işle
     if (!no && adminKodu) {
       bildirimAc();
       return;
@@ -334,7 +332,7 @@
       return;
     }
 
-    let html = `<label>📋 Bu Telefonda Takip Edilen Dosyalar</label>`;
+    let html = `<div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid #e2e8f0;"><label>📋 Bu Telefonda Takip Edilen Dosyalar</label>`;
     data.kayitlar.forEach((k) => {
       const durum = k.onaylandi ? `✅ Onaylandı (${k.madde || ""})` : `⏳ Bekliyor (${k.madde || "Otomatik"})`;
       html += `
@@ -343,6 +341,7 @@
           <button class="sil-btn" onclick="takipSil('${k.dosya_no}')">Sil</button>
         </div>`;
     });
+    html += `</div>`;
     alan.innerHTML = html;
   }
 
