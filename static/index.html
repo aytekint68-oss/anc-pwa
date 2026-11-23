@@ -175,16 +175,18 @@
       }
     }
 
-    /* KVKK Modal Stilleri */
+    /* Modal Stilleri */
     .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 9999; backdrop-filter: blur(2px); }
     .modal-box { background: #fff; border-radius: 16px; max-width: 420px; width: 100%; padding: 20px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.25); animation: popIn 0.18s ease-out; }
     @keyframes popIn { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     .modal-title { font-size: 1.05rem; font-weight: 700; color: var(--primary); margin: 0 0 10px 0; display: flex; align-items: center; gap: 8px; }
+    .modal-title-danger { color: #b91c1c; }
     .modal-text { font-size: 0.88rem; color: #334155; line-height: 1.5; margin: 0 0 12px 0; }
     .modal-question { font-size: 0.9rem; font-weight: 600; color: #0f172a; margin: 0 0 14px 0; }
     .modal-actions { display: flex; gap: 10px; }
     .btn-cancel { background: #e2e8f0; color: #334155; flex: 1; padding: 11px; font-size: 0.9rem; }
     .btn-confirm { background: #16a34a; color: #fff; flex: 1.4; padding: 11px; font-size: 0.9rem; }
+    .btn-danger-confirm { background: #dc2626; color: #fff; flex: 1.4; padding: 11px; font-size: 0.9rem; }
     .hidden { display: none !important; }
   </style>
 </head>
@@ -268,6 +270,20 @@
     <div class="modal-actions">
       <button type="button" class="btn-cancel" onclick="kvkkKapat()">❌ Vazgeç</button>
       <button type="button" class="btn-confirm" onclick="kvkkOnaylaVeBaslat()">✅ Onaylıyorum</button>
+    </div>
+  </div>
+</div>
+
+<div id="silmeModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3 class="modal-title modal-title-danger">🗑️ Takibi Sonlandır</h3>
+    <p class="modal-text">
+      <strong id="silinecekDosyaNo"></strong> numaralı dosyanın bildirim takibini silmek üzeresiniz. Bu işlem sonrasında bu dosya için karar veya Termen güncelleme bildirimi almayacaksınız.
+    </p>
+    <p class="modal-question">Silmek istediğinize emin misiniz?</p>
+    <div class="modal-actions">
+      <button type="button" class="btn-cancel" onclick="silmeModalKapat()">Vazgeç</button>
+      <button type="button" class="btn-danger-confirm" onclick="silmeOnaylaVeSil()">🗑️ Evet, Sil</button>
     </div>
   </div>
 </div>
@@ -573,17 +589,35 @@
     let html = `<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid #e2e8f0;"><label>${listeBasligi}</label>`;
     data.kayitlar.forEach((k) => {
       const durum = k.onaylandi ? `✅ Onaylandı (${k.madde || ""})` : `⏳ Bekliyor (${k.madde || "Otomatik"})`;
+      const guvenliNo = (k.dosya_no || "").replace(/'/g, "\\'");
       html += `
         <div class="takip-item">
           <div><strong>${k.dosya_no}</strong><br/><small>${durum}</small></div>
-          <button class="sil-btn" onclick="takipSil('${k.dosya_no}')">Sil</button>
+          <button class="sil-btn" onclick="takipSilOnayAc('${guvenliNo}')">Sil</button>
         </div>`;
     });
     html += `</div>`;
     alan.innerHTML = html;
   }
 
-  async function takipSil(dosyaNo) {
+  let silinecekDosyaHedefi = "";
+
+  function takipSilOnayAc(dosyaNo) {
+    silinecekDosyaHedefi = dosyaNo;
+    document.getElementById("silinecekDosyaNo").textContent = dosyaNo;
+    document.getElementById("silmeModal").classList.remove("hidden");
+  }
+
+  function silmeModalKapat() {
+    silinecekDosyaHedefi = "";
+    document.getElementById("silmeModal").classList.add("hidden");
+  }
+
+  async function silmeOnaylaVeSil() {
+    const dosyaNo = silinecekDosyaHedefi;
+    silmeModalKapat();
+    if (!dosyaNo) return;
+
     const reg = await navigator.serviceWorker.ready;
     const sub = await reg.pushManager.getSubscription();
     if (!sub) return;
@@ -592,6 +626,7 @@
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ dosya_no: dosyaNo, endpoint: sub.endpoint })
     });
+    document.getElementById("takipSonuc").innerHTML = `<div class="alert alert-warn">🗑️ <strong>${dosyaNo}</strong> numaralı dosya bildirim takibinden çıkarıldı.</div>`;
     listeyiYenile();
   }
 </script>
