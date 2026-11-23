@@ -66,31 +66,83 @@ def _dinamik_sorgu_olustur(koleksiyon_adi: str, aday_numaralar: list) -> dict:
     return {"$or": [{alan: {"$in": aday_numaralar}} for alan in alanlar]}
 
 
-def _dosya_maddesini_tespit_et(temiz_no: str) -> str:
+def _termen_degerini_bul(kayit: dict) -> str:
     """
-    stadiu_dosar ve karar tablolarına bakarak dosyanın Madde 10 mu Madde 11 mi olduğunu kesin tespit eder.
+    Kayıt içerisinden 'Termen' sütunundaki tarihi dinamik olarak okur.
     """
+    if not kayit:
+        return ""
+    for k, v in kayit.items():
+        if "termen" in k.lower():
+            deger = str(v).strip()
+            if deger and deger.lower() not in ["nan", "none", "null", "-"]:
+                return deger
+    return ""
+
+
+def _stadiu_ve_termen_analiz_et(temiz_no: str) -> dict:
+    """
+    stadiu_dosar ve stadiu_dosar_eski tablolarını karşılaştırarak:
+    - Dosyanın maddesini (Madde 10 / Madde 11)
+    - Güncel Termen tarihini
+    - Eski Termen tarihini ve değişip değişmediğini tespit eder.
+    """
+    sonuc = {
+        "madde": "Otomatik",
+        "guncel_termen": "",
+        "eski_termen": "",
+        "termen_degisti": False
+    }
     if db is None:
-        return "Otomatik"
+        return sonuc
 
     aday_numaralar = _dosya_varyasyonlari(temiz_no)
+    koleksiyonlar = db.list_collection_names()
 
-    # 1. Önce stadiu_dosar koleksiyonunda ara
-    if "stadiu_dosar" in db.list_collection_names():
-        sorgu = _dinamik_sorgu_olustur("stadiu_dosar", aday_numaralar)
-        kayit = db["stadiu_dosar"].find_one(sorgu, {"_id": 0})
-        if kayit:
-            tum_degerler = " ".join(str(v) for v in kayit.values()).lower()
-            if "art-11" in tum_degerler or "articolul 11" in tum_degerler or "madde 11" in tum_degerler:
-                return "Madde 11"
-            if "art-10" in tum_degerler or "articolul 10" in tum_degerler or "madde 10" in tum_degerler:
-                return "Madde 10"
+    guncel_kayit = None
+    eski_kayit = None
 
-    # 2. Onaylanan karar tablolarında zaten varsa oradan tespit et
-    if db["kararlar_m11"].find_one(_dinamik_sorgu_olustur("kararlar_m11", aday_numaralar)):
-        return "Madde 11"
-    if db["kararlar_m10"].find_one(_dinamik_sorgu_olustur("kararlar_m10", aday_numaralar)):
-        return "Madde 10"
+    if "stadiu_dosar" in koleksiyonlar:
+        guncel_kayit = db["stadiu_dosar"].find_one(
+            _dinamik_sorgu_olustur("stadiu_dosar", aday_numaralar), {"_id": 0}
+        )
+
+    if "stadiu_dosar_eski" in koleksiyonlar:
+        eski_kayit = db["stadiu_dosar_eski"].find_one(
+            _dinamik_sorgu_olustur("stadiu_dosar_eski", aday_numaralar), {"_id": 0}
+        )
+
+    aktif_kayit = guncel_kayit or eski_kayit
+    if aktif_kayit:
+        tum_degerler = " ".join(str(v) for v in aktif_kayit.values()).lower()
+        if "art-11" in tum_degerler or "articolul 11" in tum_degerler or "madde 11" in tum_degerler:
+            sonuc["madde"] = "Madde 11"
+        elif "art-10" in tum_degerler or "articolul 10" in tum_degerler or "madde 10" in tum_degerler:
+            sonuc["madde"] = "Madde 10"
+
+    guncel_termen = _termen_degerini_bul(guncel_kayit)
+    eski_termen = _termen_degerini_bul(eski_kayit)
+
+    sonuc["guncel_termen"] = guncel_termen
+    sonuc["eski_termen"] = eski_termen
+
+    if guncel_termen and eski_termen and guncel_termen != eski_termen:
+        sonuc["termen_degisti"] = True
+
+    return sonuc
+
+
+def _dosya_maddesini_tespit_et(temiz_no: str) -> str:
+    analiz = _stadiu_ve_termen_analiz_et(temiz_no)
+    if analiz["madde"] != "Otomatik":
+        return analiz["madde"]
+
+    if db is not None:
+        aday_numaralar = _dosya_varyasyonlari(temiz_no)
+        if db["kararlar_m11"].find_one(_dinamik_sorgu_olustur("kararlar_m11", aday_numaralar)):
+            return "Madde 11"
+        if db["kararlar_m10"].find_one(_dinamik_sorgu_olustur("kararlar_m10", aday_numaralar)):
+            return "Madde 10"
 
     return "Otomatik"
 
@@ -136,7 +188,6 @@ async def dosya_sorgula(dosya_no: str):
         sorgu_filtresi = _dinamik_sorgu_olustur(kol_adi, aday_numaralar)
         kayitlar = list(db[kol_adi].find(sorgu_filtresi, {"_id": 0}))
         for kayit in kayitlar:
-            # Sütun adı ne olursa olsun PDF adı, tarih ve linki esnek çek
             pdf_adi = "-"
             tarih = "-"
             pdf_url = ""
@@ -162,11 +213,21 @@ async def dosya_sorgula(dosya_no: str):
             })
 
     if not bulunanlar:
-        tespit_madde = _dosya_maddesini_tespit_et(temiz_no)
-        madde_notu = f" ({tespit_madde} kapsamında işlemde)" if tespit_madde != "Otomatik" else ""
+        analiz = _stadiu_ve_termen_analiz_et(temiz_no)
+        madde_notu = f" ({analiz['madde']} kapsamında işlemde)" if analiz["madde"] != "Otomatik" else ""
+        mesaj = f"{temiz_no}{madde_notu} numaralı dosya henüz onaylanan karar listelerinde yer almıyor."
+
+        if analiz["termen_degisti"]:
+            mesaj += (
+                f"<br/><br/>📅 <strong>Termen Tarihi Güncellendi!</strong><br/>"
+                f"Eski Termen: <del>{analiz['eski_termen']}</del> &rarr; Yeni Termen: <strong>{analiz['guncel_termen']}</strong>"
+            )
+        elif analiz["guncel_termen"]:
+            mesaj += f"<br/><br/>📅 <strong>Mevcut Termen Tarihi:</strong> {analiz['guncel_termen']}"
+
         return {
             "bulundu": False,
-            "mesaj": f"{temiz_no}{madde_notu} numaralı dosya henüz onaylanan karar listelerinde yer almıyor."
+            "mesaj": mesaj
         }
 
     ilk = bulunanlar[0]
