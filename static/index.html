@@ -75,7 +75,6 @@
     .alert-warn { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
     .alert-err { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
 
-    /* Ayrıntılı Dosya Bilgi Kartı */
     .dosya-detay-kart {
       background: #f8fafc;
       border: 1px solid #cbd5e1;
@@ -324,7 +323,6 @@
     takipInput.focus();
   }
 
-  // Dosya numarasının /RD/ içerip içermemesine göre eşleşme kontrolü
   function dosyaVaryasyonlariUret(no) {
     const temiz = no.trim().toUpperCase();
     const set = new Set([temiz]);
@@ -337,10 +335,10 @@
 
   async function dosyaTakipteMi(dosyaNo) {
     try {
-      if (!("serviceWorker" in navigator)) return false;
+      if (!("serviceWorker" in navigator)) return null;
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
-      if (!sub) return false;
+      if (!sub) return null;
 
       const res = await fetch("/api/takip-listem", {
         method: "POST",
@@ -348,15 +346,16 @@
         body: JSON.stringify({ endpoint: sub.endpoint })
       });
       const data = await res.json();
-      if (!data.kayitlar || data.kayitlar.length === 0) return false;
+      if (!data.kayitlar || data.kayitlar.length === 0) return null;
 
       const adaylar = dosyaVaryasyonlariUret(dosyaNo);
-      return data.kayitlar.some((k) => {
+      const eslesen = data.kayitlar.find((k) => {
         const kayitAdaylari = dosyaVaryasyonlariUret(k.dosya_no || "");
         return kayitAdaylari.some((ka) => adaylar.includes(ka));
       });
+      return eslesen || null;
     } catch (e) {
-      return false;
+      return null;
     }
   }
 
@@ -379,7 +378,7 @@
     }
     kutu.innerHTML = `<div class="alert alert-warn">⏳ Dosya durumu ve karar listeleri taranıyor...</div>`;
     try {
-      const [res, takipte] = await Promise.all([
+      const [res, takiptekiKayit] = await Promise.all([
         fetch(`/api/sorgula?dosya_no=${encodeURIComponent(no)}`),
         dosyaTakipteMi(no)
       ]);
@@ -431,7 +430,7 @@
       } else {
         const guvenliNo = gosterilenNo.replace(/'/g, "\\'");
         const cihazAdi = isMobile ? "bu telefonda" : "bu bilgisayarda";
-        const takipAltHtml = takipte
+        const takipAltHtml = takiptekiKayit
           ? `<div class="takipte-rozet">✅ Bu dosya zaten ${cihazAdi} bildirim takibinde. Karar çıktığında anında bildirim alacaksınız.</div>`
           : `<button type="button" class="btn-takibe-aktar" onclick="bildirimTakibineAktar('${guvenliNo}')">🔔 ${gosterilenNo} Dosyasını Bildirim Takibine Al &rarr;</button>`;
 
@@ -462,7 +461,7 @@
     return Uint8Array.from([...rawData].map((char) => char.charCodeAt(0)));
   }
 
-  function kvkkOnayAc() {
+  async function kvkkOnayAc() {
     const no = document.getElementById("takipNo").value.trim().toUpperCase();
     const adminKodu = document.getElementById("adminKodu").value.trim();
     const kutu = document.getElementById("takipSonuc");
@@ -475,6 +474,17 @@
     if (!no) {
       kutu.innerHTML = `<div class="alert alert-err">Lütfen takip edilecek dosya numarasını girin.</div>`;
       return;
+    }
+
+    // Mükerrer takip kontrolü (Admin kodu girilmediyse)
+    if (!adminKodu) {
+      const mevcut = await dosyaTakipteMi(no);
+      if (mevcut) {
+        const cihazAdi = isMobile ? "bu telefonda" : "bu bilgisayarda";
+        const cihazEk = isMobile ? "telefonunuza" : "bilgisayarınıza";
+        kutu.innerHTML = `<div class="alert alert-warn">ℹ️ <strong>${mevcut.dosya_no}</strong> numaralı dosya zaten ${cihazAdi} bildirim takibinde! Karar çıktığında ${cihazEk} anında bildirim gelecek.</div>`;
+        return;
+      }
     }
 
     document.getElementById("kvkkDosyaNo").textContent = no;
@@ -530,7 +540,8 @@
       });
       const sonuc = await res.json();
       if (res.ok) {
-        kutu.innerHTML = `<div class="alert alert-ok">${sonuc.mesaj}</div>`;
+        const alertClass = sonuc.zaten_kayitli ? "alert-warn" : "alert-ok";
+        kutu.innerHTML = `<div class="alert ${alertClass}">${sonuc.mesaj}</div>`;
         document.getElementById("takipNo").value = "";
         listeyiYenile();
       } else {
