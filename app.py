@@ -2,30 +2,28 @@ import os
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from pymongo import MongoClient
 
 app = FastAPI(title="ANC Dosya Takip PWA")
 
-# Ortam Değişkenleri (Render panelinden girilecek)
+# Ortam Değişkenleri (Render Environment Variables üzerinden okunur)
 MONGO_URI = os.getenv("MONGO_URI", "")
-DB_NAME = os.getenv("DB_NAME", "anc_veritabani")
+DB_NAME = os.getenv("DB_NAME", "")
 VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
-ADMIN_SECRET = os.getenv("ADMIN_SECRET", "gizli_admin_sifrem_2026")
+ADMIN_SECRET = os.getenv("ADMIN_SECRET", "")
 
 TSI = timezone(timedelta(hours=3))
 
 client = MongoClient(MONGO_URI) if MONGO_URI else None
-db = client[DB_NAME] if client else None
+db = client[DB_NAME] if (client and DB_NAME) else None
 
-# Statik PWA dosyalarını (manifest.json, sw.js, ikonlar) sun
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
-# İstek Modelleri
 class AbonelikIstegi(BaseModel):
     dosya_no: str
     madde: str  # "Madde 10" veya "Madde 11"
@@ -51,13 +49,11 @@ async def manifest():
 
 @app.get("/sw.js")
 async def service_worker():
-    # Service Worker'ın tüm siteyi kapsayabilmesi için kök dizinden (/) sunulması zorunludur
     return FileResponse("static/sw.js", media_type="application/javascript")
 
 
 @app.get("/ping")
 async def ping():
-    """takipci.py tarafından Render uyku modunu önlemek için çağrılır."""
     return {"status": "ok", "time": datetime.now(TSI).strftime("%H:%M:%S")}
 
 
@@ -67,7 +63,7 @@ async def get_vapid_key():
 
 
 @app.get("/api/sorgula")
-async def dosya_sorgula(dosya_no: str, madde: str):
+async def dosya_sorgula(dosya_no: str):
     if db is None:
         raise HTTPException(status_code=500, detail="Veritabanı bağlantısı yapılandırılmamış.")
 
@@ -75,38 +71,43 @@ async def dosya_sorgula(dosya_no: str, madde: str):
     if not temiz_no:
         raise HTTPException(status_code=400, detail="Lütfen geçerli bir dosya numarası girin.")
 
-    koleksiyon_adi = "kararlar_m11" if madde == "Madde 11" else "kararlar_m10"
-    col = db[koleksiyon_adi]
-
-    # Veritabanındaki olası alan adlarına göre esnek arama (dosya_no / Dosya_No / dosya)
-    sonuclar = list(col.find({
+    sorgu_filtresi = {
         "$or": [
             {"dosya_no": temiz_no},
             {"Dosya_No": temiz_no},
             {"dosya": temiz_no}
         ]
-    }, {"_id": 0}))
+    }
 
-    if not sonuclar:
+    bulunanlar = []
+
+    # Hem Madde 11 hem Madde 10 tablolarını kontrol et
+    for madde_adi, kol_adi in [("Madde 11", "kararlar_m11"), ("Madde 10", "kararlar_m10")]:
+        kayitlar = list(db[kol_adi].find(sorgu_filtresi, {"_id": 0}))
+        for kayit in kayitlar:
+            bulunanlar.append({
+                "dosya_no": temiz_no,
+                "madde": madde_adi,
+                "pdf_adi": kayit.get("pdf_adi") or kayit.get("dosya_adi") or kayit.get("Ordin") or "Karar PDF",
+                "tarih": kayit.get("tarih") or kayit.get("Tarih") or kayit.get("karar_tarihi") or "-",
+                "pdf_url": kayit.get("pdf_url") or kayit.get("link") or kayit.get("url") or ""
+            })
+
+    if not bulunanlar:
         return {
             "bulundu": False,
-            "mesaj": f"{temiz_no} ({madde}) numaralı dosya henüz onaylanan listelerde yer almıyor."
+            "mesaj": f"{temiz_no} numaralı dosya henüz onaylanan listelerde (Madde 10 & 11) yer almıyor."
         }
 
-    # İlk eşleşen kaydın detaylarını döndür
-    kayit = sonuclar[0]
-    pdf_adi = kayit.get("pdf_adi") or kayit.get("dosya_adi") or kayit.get("Ordin") or "Karar PDF"
-    tarih = kayit.get("tarih") or kayit.get("Tarih") or kayit.get("karar_tarihi") or "-"
-    pdf_url = kayit.get("pdf_url") or kayit.get("link") or kayit.get("url") or ""
-
+    ilk = bulunanlar[0]
     return {
         "bulundu": True,
-        "dosya_no": temiz_no,
-        "madde": madde,
-        "pdf_adi": pdf_adi,
-        "tarih": tarih,
-        "pdf_url": pdf_url,
-        "toplam_eslesme": len(sonuclar)
+        "dosya_no": ilk["dosya_no"],
+        "madde": ilk["madde"],
+        "pdf_adi": ilk["pdf_adi"],
+        "tarih": ilk["tarih"],
+        "pdf_url": ilk["pdf_url"],
+        "tum_sonuclar": bulunanlar
     }
 
 
@@ -122,7 +123,6 @@ async def abone_ol(veri: AbonelikIstegi):
 
     is_admin = (veri.admin_kodu == ADMIN_SECRET) and (ADMIN_SECRET != "")
 
-    # Eğer sadece admin cihaz kaydı yapılıyorsa (dosya no boşsa)
     if is_admin and not temiz_no:
         db["pwa_abonelikleri"].update_one(
             {"subscription.endpoint": endpoint, "is_admin": True},
@@ -139,7 +139,6 @@ async def abone_ol(veri: AbonelikIstegi):
     if not temiz_no:
         raise HTTPException(status_code=400, detail="Lütfen takip edilecek dosya numarasını girin.")
 
-    # Aynı cihaz + aynı dosya + aynı madde varsa güncelle, yoksa yeni ekle
     filtre = {
         "subscription.endpoint": endpoint,
         "dosya_no": temiz_no,
@@ -167,7 +166,6 @@ async def abone_ol(veri: AbonelikIstegi):
 
 @app.post("/api/takip-listem")
 async def takip_listem(veri: dict):
-    """Kullanıcının kendi telefonundan takip ettiği aktif dosyaları listeler."""
     if db is None:
         return {"kayitlar": []}
     endpoint = veri.get("endpoint")
