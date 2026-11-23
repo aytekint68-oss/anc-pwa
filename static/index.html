@@ -42,10 +42,59 @@
     button:active { transform: scale(0.98); }
 
     .btn-success { background: #16a34a; margin-top: 8px; display: inline-block; text-align: center; text-decoration: none; color: #fff; padding: 9px; border-radius: 8px; font-weight: 600; width: 100%; font-size: 0.88rem; }
-    .alert { padding: 10px; border-radius: 9px; font-size: 0.84rem; margin-top: 10px; line-height: 1.4; }
+    .alert { padding: 11px 12px; border-radius: 9px; font-size: 0.84rem; margin-top: 10px; line-height: 1.45; }
     .alert-ok { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
     .alert-warn { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
     .alert-err { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+
+    /* Ayrıntılı Dosya Bilgi Kartı */
+    .dosya-detay-kart {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 10px;
+      font-size: 0.84rem;
+      color: #1e293b;
+      line-height: 1.55;
+    }
+    .detay-baslik {
+      font-weight: 700;
+      font-size: 0.86rem;
+      color: var(--primary);
+      margin-bottom: 4px;
+    }
+    .detay-no {
+      font-weight: 700;
+      font-size: 0.92rem;
+      color: #0f172a;
+    }
+    .detay-cizgi {
+      border: 0;
+      border-top: 1.5px solid #cbd5e1;
+      margin: 8px 0;
+    }
+    .detay-satir {
+      margin: 3px 0;
+      word-break: break-word;
+    }
+    .karar-durum-ok {
+      background: #dcfce7;
+      border: 1px solid #86efac;
+      color: #166534;
+      padding: 9px 10px;
+      border-radius: 8px;
+      margin-top: 6px;
+    }
+    .karar-durum-bekliyor {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+      padding: 9px 10px;
+      border-radius: 8px;
+      margin-top: 6px;
+      font-weight: 600;
+    }
 
     .ios-guide { display: none; background: #eff6ff; border: 1px solid #93c5fd; color: #1e40af; padding: 9px 11px; border-radius: 10px; margin-bottom: 10px; font-size: 0.78rem; line-height: 1.38; }
     .takip-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.85rem; }
@@ -142,7 +191,7 @@
   </div>
 
   <div id="panel-sorgu" class="card">
-    <label>Dosya Numarası (Örn: 12345/2023)</label>
+    <label>Dosya Numarası (Örn: 12345/2023 veya 11470/RD/2026)</label>
     <input type="text" id="sorguNo" placeholder="12345/2023" inputmode="text" />
     <button onclick="dosyaSorgula()">Dosyayı Sorgula</button>
     <div id="sorguSonuc"></div>
@@ -257,26 +306,75 @@
       kutu.innerHTML = `<div class="alert alert-err">Lütfen bir dosya numarası girin.</div>`;
       return;
     }
-    kutu.innerHTML = `<div class="alert alert-warn">⏳ Madde 10 ve Madde 11 listeleri taranıyor...</div>`;
+    kutu.innerHTML = `<div class="alert alert-warn">⏳ Dosya durumu ve karar listeleri taranıyor...</div>`;
     try {
       const res = await fetch(`/api/sorgula?dosya_no=${encodeURIComponent(no)}`);
       const data = await res.json();
+      const d = data.detay || {};
+      const gosterilenNo = d.resmi_no || data.dosya_no || no.toUpperCase();
+
+      // Termen satırı (değişmişse eski -> yeni göster)
+      let termenMetni = d.guncel_termen || "-";
+      if (d.termen_degisti && d.eski_termen) {
+        termenMetni = `<del style="color:#64748b;">${d.eski_termen}</del> &rarr; <strong style="color:#b45309;">${d.guncel_termen}</strong> <span style="font-size:0.75rem; background:#fef3c7; color:#92400e; padding:1px 5px; border-radius:4px;">Güncellendi</span>`;
+      }
+
+      // Üst kısım: Stadiu Dosar detayları (varsa)
+      let ustBilgiHtml = "";
+      if (d.kayit_var) {
+        ustBilgiHtml = `
+          <div class="detay-baslik">📂 DOSYA BİLGİLERİ</div>
+          <div class="detay-no">No: ${gosterilenNo}</div>
+          <hr class="detay-cizgi" />
+          <div class="detay-satir">📅 <strong>Başvuru Tarihi:</strong> ${d.basvuru_tarihi}</div>
+          <div class="detay-satir">⏳ <strong>Sonraki Aşama (Termen):</strong> ${termenMetni}</div>
+          <div class="detay-satir">📝 <strong>Kurum Notu (Solutie):</strong> ${d.solutie}</div>
+          <div class="detay-satir">📂 <strong>Kaynak:</strong> ${d.kaynak_pdf}</div>
+          <hr class="detay-cizgi" />
+        `;
+      } else {
+        ustBilgiHtml = `
+          <div class="detay-baslik">📂 DOSYA BİLGİLERİ</div>
+          <div class="detay-no">No: ${gosterilenNo}</div>
+          <hr class="detay-cizgi" />
+          <div class="detay-satir" style="color:#64748b;">ℹ️ Bu dosya numarasına ait güncel <em>Stadiu Dosar</em> tablo kaydı bulunamadı.</div>
+          <hr class="detay-cizgi" />
+        `;
+      }
+
+      // Alt kısım: Karar (Ordin) Durumu
+      let kararHtml = "";
       if (data.bulundu) {
         const liste = data.tum_sonuclar || [data];
-        kutu.innerHTML = liste.map((item) => {
+        kararHtml = liste.map((item) => {
           const pdfBtn = item.pdf_url ? `<a href="${item.pdf_url}" target="_blank" class="btn-success">📄 Resmi Karar PDF'ini İndir</a>` : "";
           return `
-            <div class="alert alert-ok">
+            <div class="karar-durum-ok">
               <strong>🎉 TEBRİKLER! Dosyanız Onaylandı!</strong><br/>
-              <strong>Dosya:</strong> ${item.dosya_no} (${item.madde})<br/>
+              <strong>Kapsam:</strong> ${item.madde}<br/>
               <strong>Karar Belgesi:</strong> ${item.pdf_adi}<br/>
-              <strong>Tarih:</strong> ${item.tarih}
+              <strong>Karar Tarihi:</strong> ${item.tarih}
               ${pdfBtn}
             </div>`;
         }).join("");
       } else {
-        kutu.innerHTML = `<div class="alert alert-warn">ℹ️ ${data.mesaj}<br/><small>Bildirim takibi sekmesinden dosyanızı kaydederek karar çıktığı an bildirim alabilirsiniz.</small></div>`;
+        kararHtml = `
+          <div class="karar-durum-bekliyor">
+            ❌ 🔴 Dosyanız henüz resmi Karar (Ordin) listelerinde yayımlanmamıştır.
+          </div>
+          <div style="font-size:0.78rem; color:#475569; margin-top:6px;">
+            💡 <strong>Bildirim Takibi</strong> sekmesinden dosyanızı kaydederek karar çıktığı an bildirim alabilirsiniz.
+          </div>
+        `;
       }
+
+      kutu.innerHTML = `
+        <div class="dosya-detay-kart">
+          ${ustBilgiHtml}
+          <div class="detay-baslik">⚖️ KARAR (ORDIN) DURUMU</div>
+          ${kararHtml}
+        </div>
+      `;
     } catch (e) {
       kutu.innerHTML = `<div class="alert alert-err">Sunucuya bağlanılamadı, lütfen tekrar deneyin.</div>`;
     }
