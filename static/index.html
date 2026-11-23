@@ -35,7 +35,6 @@
     .takip-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
     .takip-item:last-child { border-bottom: none; }
     .sil-btn { width: auto; padding: 5px 10px; font-size: 0.8rem; background: #ef4444; }
-    /* Reklam / Sponsorluk Alanı */
     .ad-slot { background: #fff; border: 1px dashed #cbd5e1; border-radius: 12px; padding: 14px; text-align: center; font-size: 0.82rem; color: #64748b; margin-top: 18px; }
     .hidden { display: none; }
   </style>
@@ -68,12 +67,6 @@
 
   <!-- 1. MANUEL SORGULAMA SEKMESİ -->
   <div id="panel-sorgu" class="card">
-    <label>Başvuru Maddesi</label>
-    <select id="sorguMadde">
-      <option value="Madde 11">Madde 11 (Articolul 11)</option>
-      <option value="Madde 10">Madde 10 (Articolul 10)</option>
-    </select>
-
     <label>Dosya Numarası (Örn: 12345/2023)</label>
     <input type="text" id="sorguNo" placeholder="12345/2023" inputmode="text" />
 
@@ -113,14 +106,12 @@
 </div>
 
 <script>
-  // iOS Safari kontrolü (Standalone değilse rehberi göster)
   const isIos = /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
   if (isIos && !isStandalone) {
     document.getElementById("iosGuide").style.display = "block";
   }
 
-  // Android PWA Kurulum Tetikleyicisi
   let deferredPrompt;
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
@@ -136,7 +127,6 @@
     document.getElementById("androidInstallBox").classList.add("hidden");
   });
 
-  // Başlığa 5 kez dokunulursa Admin şifre kutusunu aç
   let tiklamaSayaci = 0;
   document.getElementById("appTitle").addEventListener("click", () => {
     tiklamaSayaci++;
@@ -155,41 +145,40 @@
     if (ad === "takip") listeyiYenile();
   }
 
-  // Service Worker Kaydı
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("/sw.js");
   }
 
-  // URL'den gelen sorgu parametresi varsa otomatik doldur
   const params = new URLSearchParams(window.location.search);
   if (params.get("sorgu")) {
     document.getElementById("sorguNo").value = params.get("sorgu");
-    if (params.get("madde")) document.getElementById("sorguMadde").value = params.get("madde");
     dosyaSorgula();
   }
 
   async function dosyaSorgula() {
     const no = document.getElementById("sorguNo").value.trim();
-    const madde = document.getElementById("sorguMadde").value;
     const kutu = document.getElementById("sorguSonuc");
     if (!no) {
       kutu.innerHTML = `<div class="alert alert-err">Lütfen bir dosya numarası girin.</div>`;
       return;
     }
-    kutu.innerHTML = `<div class="alert alert-warn">⏳ Veritabanı taranıyor...</div>`;
+    kutu.innerHTML = `<div class="alert alert-warn">⏳ Madde 10 ve Madde 11 listeleri taranıyor...</div>`;
     try {
-      const res = await fetch(`/api/sorgula?dosya_no=${encodeURIComponent(no)}&madde=${encodeURIComponent(madde)}`);
+      const res = await fetch(`/api/sorgula?dosya_no=${encodeURIComponent(no)}`);
       const data = await res.json();
       if (data.bulundu) {
-        const pdfBtn = data.pdf_url ? `<a href="${data.pdf_url}" target="_blank" class="btn-success">📄 Resmi Karar PDF'ini İndir</a>` : "";
-        kutu.innerHTML = `
-          <div class="alert alert-ok">
-            <strong>🎉 TEBRİKLER! Dosyanız Onaylandı!</strong><br/>
-            <strong>Dosya:</strong> ${data.dosya_no} (${data.madde})<br/>
-            <strong>Karar Belgesi:</strong> ${data.pdf_adi}<br/>
-            <strong>Tarih:</strong> ${data.tarih}
-            ${pdfBtn}
-          </div>`;
+        const liste = data.tum_sonuclar || [data];
+        kutu.innerHTML = liste.map((item) => {
+          const pdfBtn = item.pdf_url ? `<a href="${item.pdf_url}" target="_blank" class="btn-success">📄 Resmi Karar PDF'ini İndir</a>` : "";
+          return `
+            <div class="alert alert-ok">
+              <strong>🎉 TEBRİKLER! Dosyanız Onaylandı!</strong><br/>
+              <strong>Dosya:</strong> ${item.dosya_no} (${item.madde})<br/>
+              <strong>Karar Belgesi:</strong> ${item.pdf_adi}<br/>
+              <strong>Tarih:</strong> ${item.tarih}
+              ${pdfBtn}
+            </div>`;
+        }).join("");
       } else {
         kutu.innerHTML = `<div class="alert alert-warn">ℹ️ ${data.mesaj}<br/><small>Bildirim takibi sekmesinden dosyanızı kaydederek karar çıktığı an bildirim alabilirsiniz.</small></div>`;
       }
