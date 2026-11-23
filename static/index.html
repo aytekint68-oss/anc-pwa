@@ -12,78 +12,66 @@
   <style>
     :root { --primary: #1e3a8a; --accent: #f59e0b; --bg: #f1f5f9; --card: #ffffff; --text: #0f172a; }
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    html, body { height: 100%; margin: 0; background: var(--bg); color: var(--text); }
-    body {
-      display: flex;
-      flex-direction: column;
-      min-height: 100dvh;
-    }
+    body { margin: 0; background: var(--bg); color: var(--text); padding-bottom: 18px; }
     header {
       background: linear-gradient(135deg, #1e3a8a, #1d4ed8);
       color: #fff;
-      padding: 13px 12px;
+      padding: 14px 12px;
       text-align: center;
       box-shadow: 0 2px 8px rgba(0,0,0,0.12);
-      flex-shrink: 0;
     }
-    header h1 { margin: 0; font-size: 1.15rem; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    header p { margin: 3px 0 0; font-size: 0.78rem; opacity: 0.92; }
+    header h1 { margin: 0; font-size: 1.16rem; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    header p { margin: 4px 0 0; font-size: 0.8rem; opacity: 0.92; }
 
     .container {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
       max-width: 480px;
       width: 100%;
       margin: 0 auto;
-      padding: 10px 12px 10px;
+      padding: 12px 12px 0;
     }
 
-    .main-area { display: flex; flex-direction: column; }
-
-    .tabs { display: flex; background: #e2e8f0; border-radius: 10px; padding: 3px; margin-bottom: 10px; }
-    .tab { flex: 1; text-align: center; padding: 8px; font-weight: 600; font-size: 0.85rem; border-radius: 8px; cursor: pointer; color: #475569; transition: 0.2s; }
+    .tabs { display: flex; background: #e2e8f0; border-radius: 10px; padding: 3px; margin-bottom: 12px; }
+    .tab { flex: 1; text-align: center; padding: 9px; font-weight: 600; font-size: 0.86rem; border-radius: 8px; cursor: pointer; color: #475569; transition: 0.2s; }
     .tab.active { background: #fff; color: var(--primary); box-shadow: 0 2px 5px rgba(0,0,0,0.08); }
 
-    .card { background: var(--card); border-radius: 12px; padding: 14px; box-shadow: 0 3px 10px rgba(15,23,42,0.06); margin-bottom: 10px; }
-    label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 5px; color: #334155; }
-    input { width: 100%; padding: 10px 11px; border: 1.5px solid #cbd5e1; border-radius: 9px; font-size: 0.95rem; margin-bottom: 10px; background: #fff; }
+    .card { background: var(--card); border-radius: 12px; padding: 15px; box-shadow: 0 3px 10px rgba(15,23,42,0.06); margin-bottom: 12px; }
+    label { display: block; font-size: 0.82rem; font-weight: 600; margin-bottom: 6px; color: #334155; }
+    input { width: 100%; padding: 11px 12px; border: 1.5px solid #cbd5e1; border-radius: 9px; font-size: 0.96rem; margin-bottom: 11px; background: #fff; }
     input:focus { outline: none; border-color: var(--primary); }
-    button { width: 100%; padding: 11px; border: none; border-radius: 9px; font-size: 0.94rem; font-weight: 700; cursor: pointer; background: var(--primary); color: #fff; transition: 0.2s; }
+    button { width: 100%; padding: 12px; border: none; border-radius: 9px; font-size: 0.95rem; font-weight: 700; cursor: pointer; background: var(--primary); color: #fff; transition: 0.2s; }
     button:active { transform: scale(0.98); }
 
     .btn-success { background: #16a34a; margin-top: 8px; display: inline-block; text-align: center; text-decoration: none; color: #fff; padding: 9px; border-radius: 8px; font-weight: 600; width: 100%; font-size: 0.88rem; }
-    .alert { padding: 10px; border-radius: 9px; font-size: 0.84rem; margin-top: 10px; line-height: 1.4; }
+    .alert { padding: 11px; border-radius: 9px; font-size: 0.85rem; margin-top: 10px; line-height: 1.42; }
     .alert-ok { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
     .alert-warn { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
     .alert-err { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
 
-    .ios-guide { display: none; background: #eff6ff; border: 1px solid #93c5fd; color: #1e40af; padding: 9px 11px; border-radius: 10px; margin-bottom: 10px; font-size: 0.78rem; line-height: 1.38; }
-    .takip-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.85rem; }
+    .ios-guide { display: none; background: #eff6ff; border: 1px solid #93c5fd; color: #1e40af; padding: 10px 12px; border-radius: 10px; margin-bottom: 12px; font-size: 0.8rem; line-height: 1.4; }
+    .takip-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f1f5f9; font-size: 0.86rem; }
     .takip-item:last-child { border-bottom: none; }
     .sil-btn { width: auto; padding: 4px 9px; font-size: 0.76rem; background: #ef4444; }
-    .ad-slot { background: #fff; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 10px; text-align: center; font-size: 0.78rem; color: #64748b; margin-bottom: 10px; }
+    .ad-slot { background: #fff; border: 1px dashed #cbd5e1; border-radius: 10px; padding: 11px; text-align: center; font-size: 0.8rem; color: #64748b; margin-bottom: 12px; }
 
     .legal-footer {
-      margin-top: auto;
-      padding: 10px 12px;
+      margin-top: 4px;
+      padding: 11px 13px;
       background: #e2e8f0;
       border-radius: 10px;
-      font-size: 0.68rem;
+      font-size: 0.71rem;
       color: #475569;
-      line-height: 1.38;
+      line-height: 1.42;
       text-align: justify;
     }
-    .legal-footer p { margin: 0 0 6px 0; }
+    .legal-footer p { margin: 0 0 7px 0; }
     .legal-footer .copyright {
-      margin: 7px 0 0 0;
-      padding-top: 6px;
+      margin: 8px 0 0 0;
+      padding-top: 7px;
       border-top: 1px solid #cbd5e1;
       text-align: center;
       font-weight: 600;
       color: #334155;
-      font-size: 0.72rem;
+      font-size: 0.74rem;
     }
 
     /* KVKK Modal Stilleri */
@@ -115,53 +103,51 @@
 
 <div class="container">
 
-  <div class="main-area">
-    <!-- iOS (iPhone) Ana Ekrana Ekle Yönlendirmesi -->
-    <div id="iosGuide" class="ios-guide">
-      <strong>📱 iPhone (iOS) Bildirim Kurulumu:</strong> Safari alt menüsündeki <strong>Paylaş (⬆️)</strong> simgesinden <strong>"Ana Ekrana Ekle"</strong> yapıp uygulamayı ana ekrandan açın.
+  <!-- iOS (iPhone) Ana Ekrana Ekle Yönlendirmesi -->
+  <div id="iosGuide" class="ios-guide">
+    <strong>📱 iPhone (iOS) Bildirim Kurulumu:</strong> Safari alt menüsündeki <strong>Paylaş (⬆️)</strong> simgesinden <strong>"Ana Ekrana Ekle"</strong> yapıp uygulamayı ana ekrandan açın.
+  </div>
+
+  <!-- Android Uygulama Yükle Butonu -->
+  <div id="androidInstallBox" class="hidden" style="margin-bottom: 10px;">
+    <button id="installBtn" style="background:#0f172a; padding: 10px; font-size: 0.88rem;">📲 Uygulamayı Telefonuna Yükle</button>
+  </div>
+
+  <!-- Sekmeler -->
+  <div class="tabs">
+    <div class="tab active" onclick="sekmeAc('sorgu')">🔍 Manuel Sorgula</div>
+    <div class="tab" onclick="sekmeAc('takip')">🔔 Bildirim Takibi</div>
+  </div>
+
+  <!-- 1. MANUEL SORGULAMA SEKMESİ -->
+  <div id="panel-sorgu" class="card">
+    <label>Dosya Numarası (Örn: 12345/2023 veya 11470/RD/2026)</label>
+    <input type="text" id="sorguNo" placeholder="12345/2023" inputmode="text" />
+
+    <button onclick="dosyaSorgula()">Dosyayı Sorgula</button>
+    <div id="sorguSonuc"></div>
+  </div>
+
+  <!-- 2. OTOMATİK BİLDİRİM TAKİBİ SEKMESİ -->
+  <div id="panel-takip" class="card hidden">
+    <label>Dosya Numaranız (Örn: 12345/2023)</label>
+    <input type="text" id="takipNo" placeholder="12345/2023" inputmode="text" />
+
+    <!-- Gizli Admin Kodu Alanı (Başlığa 5 kez dokununca açılır) -->
+    <div id="adminBox" class="hidden">
+      <label>🔑 Yönetici (Admin) Şifresi</label>
+      <input type="password" id="adminKodu" placeholder="Sadece sistem yöneticisi için" />
     </div>
 
-    <!-- Android Uygulama Yükle Butonu -->
-    <div id="androidInstallBox" class="hidden" style="margin-bottom: 10px;">
-      <button id="installBtn" style="background:#0f172a; padding: 9px; font-size: 0.86rem;">📲 Uygulamayı Telefonuna Yükle</button>
-    </div>
+    <button onclick="kvkkOnayAc()">🔔 Bildirimleri Aç ve Takibe Al</button>
+    <div id="takipSonuc"></div>
+    <div id="kayitliListem"></div>
+  </div>
 
-    <!-- Sekmeler -->
-    <div class="tabs">
-      <div class="tab active" onclick="sekmeAc('sorgu')">🔍 Manuel Sorgula</div>
-      <div class="tab" onclick="sekmeAc('takip')">🔔 Bildirim Takibi</div>
-    </div>
-
-    <!-- 1. MANUEL SORGULAMA SEKMESİ -->
-    <div id="panel-sorgu" class="card">
-      <label>Dosya Numarası (Örn: 12345/2023 veya 11470/RD/2026)</label>
-      <input type="text" id="sorguNo" placeholder="12345/2023" inputmode="text" />
-
-      <button onclick="dosyaSorgula()">Dosyayı Sorgula</button>
-      <div id="sorguSonuc"></div>
-    </div>
-
-    <!-- 2. OTOMATİK BİLDİRİM TAKİBİ SEKMESİ -->
-    <div id="panel-takip" class="card hidden">
-      <label>Dosya Numaranız (Örn: 12345/2023)</label>
-      <input type="text" id="takipNo" placeholder="12345/2023" inputmode="text" />
-
-      <!-- Gizli Admin Kodu Alanı (Başlığa 5 kez dokununca açılır) -->
-      <div id="adminBox" class="hidden">
-        <label>🔑 Yönetici (Admin) Şifresi</label>
-        <input type="password" id="adminKodu" placeholder="Sadece sistem yöneticisi için" />
-      </div>
-
-      <button onclick="kvkkOnayAc()">🔔 Bildirimleri Aç ve Takibe Al</button>
-      <div id="takipSonuc"></div>
-      <div id="kayitliListem"></div>
-    </div>
-
-    <!-- Reklam / Sponsorluk / Duyuru Alanı (Şimdilik gizli) -->
-    <div class="ad-slot hidden" id="adSlot">
-      📢 <strong>Duyuru & İşbirliği Alanı</strong><br/>
-      Romanya vatandaşlık süreci, yeminli tercüme ve danışmanlık duyuruları için bu alanı kullanabilirsiniz.
-    </div>
+  <!-- Reklam / Sponsorluk / Duyuru Alanı (Şimdilik gizli) -->
+  <div class="ad-slot hidden" id="adSlot">
+    📢 <strong>Duyuru & İşbirliği Alanı</strong><br/>
+    Romanya vatandaşlık süreci, yeminli tercüme ve danışmanlık duyuruları için bu alanı kullanabilirsiniz.
   </div>
 
   <!-- Yasal Bildirim ve Telif Alanı -->
