@@ -28,6 +28,7 @@ class AbonelikIstegi(BaseModel):
     dosya_no: str
     subscription: dict
     admin_kodu: Optional[str] = ""
+    cihaz_turu: Optional[str] = "mobil"
 
 
 class AbonelikSilIstegi(BaseModel):
@@ -252,6 +253,10 @@ async def abone_ol(veri: AbonelikIstegi):
     if not endpoint:
         raise HTTPException(status_code=400, detail="Geçersiz bildirim aboneliği.")
 
+    is_pc = (veri.cihaz_turu == "pc")
+    cihaz_ek = "bilgisayarınıza" if is_pc else "telefonunuza"
+    bu_cihaz = "bu bilgisayara" if is_pc else "bu telefona"
+
     is_admin = (veri.admin_kodu == ADMIN_SECRET) and (ADMIN_SECRET != "")
 
     if is_admin and not temiz_no:
@@ -261,11 +266,12 @@ async def abone_ol(veri: AbonelikIstegi):
                 "subscription": veri.subscription,
                 "is_admin": True,
                 "genel_bildirim": True,
+                "cihaz_turu": veri.cihaz_turu,
                 "kayit_tarihi": datetime.now(TSI).strftime("%d.%m.%Y %H:%M")
             }},
             upsert=True
         )
-        return {"status": "ok", "mesaj": "✅ Cihazınız Yönetici (Admin) olarak kaydedildi! Her akşam 20:00 raporu bu telefona gelecek."}
+        return {"status": "ok", "mesaj": f"✅ Cihazınız Yönetici (Admin) olarak kaydedildi! Her akşam 20:00 raporu {bu_cihaz} gelecek."}
 
     if not temiz_no:
         raise HTTPException(status_code=400, detail="Lütfen takip edilecek dosya numarasını girin.")
@@ -284,6 +290,7 @@ async def abone_ol(veri: AbonelikIstegi):
             "subscription": veri.subscription,
             "is_admin": is_admin,
             "genel_bildirim": True,
+            "cihaz_turu": veri.cihaz_turu,
             "onaylandi": False,
             "kayit_tarihi": datetime.now(TSI).strftime("%d.%m.%Y %H:%M")
         }
@@ -294,7 +301,7 @@ async def abone_ol(veri: AbonelikIstegi):
     ek_not = " [Admin Aktif]" if is_admin else ""
     return {
         "status": "ok",
-        "mesaj": f"✅ {temiz_no}{madde_bilgi} takibe alındı! Karar çıktığında telefonunuza anında bildirim gelecek.{ek_not}"
+        "mesaj": f"✅ {temiz_no}{madde_bilgi} takibe alındı! Karar çıktığında {cihaz_ek} anında bildirim gelecek.{ek_not}"
     }
 
 
