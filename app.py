@@ -40,16 +40,16 @@ class AbonelikSilIstegi(BaseModel):
 def _dosya_formati_dogrula(temiz_no: str) -> int:
     """
     Dosya numarasinin 'dosya no/yıl' kuralina uygunlugunu denetler ve yil bilgisini dondurur:
-    - Dosya no 1-5 basamakli olmali ve 0 olamaz
+    - Dosya no 1-6 basamakli olmali ve 0 olamaz
     - Arada '/' karakteri bulunmali
     - Yil 4 basamakli olmali ve 2010 ile guncel yil arasinda olmali
     """
     guncel_yil = datetime.now(TSI).year
-    eslesme = re.match(r"^(\d{1,5})/(\d{4})$", temiz_no)
+    eslesme = re.match(r"^(\d{1,6})/(\d{4})$", temiz_no)
     if not eslesme:
         raise HTTPException(
             status_code=400,
-            detail=f"Geçersiz dosya numarası formatı! Doğru format: dosya no/yıl (Örn: 12345/{guncel_yil}). Dosya no 1-5 basamaklı, yıl 4 basamaklı olmalıdır."
+            detail=f"Geçersiz dosya numarası formatı! Doğru format: dosya no/yıl (Örn: 12345/{guncel_yil}). Dosya no 1-6 basamaklı, yıl 4 basamaklı olmalıdır."
         )
 
     dosya_sayi = int(eslesme.group(1))
