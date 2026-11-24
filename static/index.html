@@ -630,6 +630,28 @@
       }
     }
 
+    kutu.innerHTML = `<div class="alert alert-warn">⏳ Dosya numarası kontrol ediliyor...</div>`;
+    try {
+      const kontrolRes = await fetch(`/api/sorgula?dosya_no=${encodeURIComponent(no)}`);
+      const kontrolData = await kontrolRes.json();
+
+      if (!kontrolRes.ok) {
+        kutu.innerHTML = "";
+        formatUyariAc(kontrolData.detail || "Geçersiz dosya numarası formatı.");
+        return;
+      }
+
+      if (!kontrolData.bulundu && kontrolData.gecmis_yil_hatali) {
+        kutu.innerHTML = "";
+        formatUyariAc(kontrolData.mesaj || "Dosya numaranız veya yılı hatalıdır, lütfen kontrol ediniz.");
+        return;
+      }
+    } catch (e) {
+      kutu.innerHTML = `<div class="alert alert-err">Sunucuya bağlanılamadı, lütfen tekrar deneyin.</div>`;
+      return;
+    }
+
+    kutu.innerHTML = "";
     document.getElementById("kvkkDosyaNo").textContent = no;
     document.getElementById("kvkkModal").classList.remove("hidden");
   }
