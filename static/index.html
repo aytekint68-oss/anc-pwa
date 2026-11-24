@@ -181,12 +181,26 @@
     @keyframes popIn { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     .modal-title { font-size: 1.05rem; font-weight: 700; color: var(--primary); margin: 0 0 10px 0; display: flex; align-items: center; gap: 8px; }
     .modal-title-danger { color: #b91c1c; }
+    .modal-title-warn { color: #b45309; }
     .modal-text { font-size: 0.88rem; color: #334155; line-height: 1.5; margin: 0 0 12px 0; }
     .modal-question { font-size: 0.9rem; font-weight: 600; color: #0f172a; margin: 0 0 14px 0; }
+    .format-ornek-kutu {
+      background: #fffbeb;
+      border: 1px solid #fcd34d;
+      color: #92400e;
+      padding: 10px 12px;
+      border-radius: 9px;
+      font-size: 0.85rem;
+      margin-bottom: 14px;
+      line-height: 1.45;
+    }
     .modal-actions { display: flex; gap: 10px; }
+    .modal-actions-col { display: flex; flex-direction: column; gap: 9px; }
     .btn-cancel { background: #e2e8f0; color: #334155; flex: 1; padding: 11px; font-size: 0.9rem; }
     .btn-confirm { background: #16a34a; color: #fff; flex: 1.4; padding: 11px; font-size: 0.9rem; }
     .btn-danger-confirm { background: #dc2626; color: #fff; flex: 1.4; padding: 11px; font-size: 0.9rem; }
+    .btn-madde-secim { background: var(--primary); color: #fff; padding: 11px; font-size: 0.9rem; }
+    .btn-madde-oto { background: #0f766e; color: #fff; padding: 11px; font-size: 0.9rem; }
     .hidden { display: none !important; }
   </style>
 </head>
@@ -220,14 +234,14 @@
   </div>
 
   <div id="panel-sorgu" class="card">
-    <label>Dosya Numarası (Örn: 12345/2023)</label>
+    <label>Dosya Numarası (Format: dosya no/yıl — Örn: 12345/2023)</label>
     <input type="text" id="sorguNo" placeholder="12345/2023" inputmode="text" />
     <button onclick="dosyaSorgula()">Dosyayı Sorgula</button>
     <div id="sorguSonuc"></div>
   </div>
 
   <div id="panel-takip" class="card hidden">
-    <label>Dosya Numaranız (Örn: 12345/2023)</label>
+    <label>Dosya Numaranız (Format: dosya no/yıl — Örn: 12345/2023)</label>
     <input type="text" id="takipNo" placeholder="12345/2023" inputmode="text" />
 
     <div id="adminBox" class="hidden">
@@ -259,6 +273,24 @@
 
 </div>
 
+<!-- Format / Dosya Doğrulama Uyarı Modalı -->
+<div id="formatUyariModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3 class="modal-title modal-title-warn">⚠️ Dosya Bilgisi Uyarısı</h3>
+    <p class="modal-text" id="formatUyariMetni"></p>
+    <div class="format-ornek-kutu">
+      <strong>✅ Doğru Format:</strong> <code>dosya no/yıl</code><br/>
+      <strong>Örnek:</strong> <code>12345/2023</code><br/>
+      <small>• Dosya no 1–5 basamaklı olmalı ve 0 olamaz.<br/>
+      • Yıl 4 basamaklı olmalı (2010–<span id="formatGuncelYil"></span>).</small>
+    </div>
+    <div class="modal-actions">
+      <button type="button" class="btn-madde-secim" onclick="formatUyariKapat()">Anladım, Kontrol Edeceğim</button>
+    </div>
+  </div>
+</div>
+
+<!-- KVKK Aydınlatma Modalı -->
 <div id="kvkkModal" class="modal-overlay hidden">
   <div class="modal-box">
     <h3 class="modal-title">🛡️ KVKK Aydınlatma ve Açık Rıza Metni</h3>
@@ -274,6 +306,24 @@
   </div>
 </div>
 
+<!-- Başvuru Maddesi Seçim Modalı -->
+<div id="maddeSecimModal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <h3 class="modal-title">📋 Başvuru Maddesi Seçimi</h3>
+    <p class="modal-text">
+      <strong id="maddeSorulanDosyaNo"></strong> numaralı dosyanız henüz ANC <em>Stadiu Dosar</em> listesinde yer almadığı için başvuru maddeniz sistem tarafından otomatik belirlenemedi.
+    </p>
+    <p class="modal-question">Biliyorsanız başvuru maddenizi seçin, bilmiyorsanız otomatik takibe alın:</p>
+    <div class="modal-actions-col">
+      <button type="button" class="btn-madde-secim" onclick="maddeSecVeKaydet('Madde 10')">📌 Madde 10</button>
+      <button type="button" class="btn-madde-secim" onclick="maddeSecVeKaydet('Madde 11')">📌 Madde 11</button>
+      <button type="button" class="btn-madde-oto" onclick="maddeSecVeKaydet('Otomatik')">🔄 Bilmiyorum (Otomatik Takip)</button>
+      <button type="button" class="btn-cancel" onclick="maddeModalKapat()">❌ Vazgeç</button>
+    </div>
+  </div>
+</div>
+
+<!-- Takip Silme Modalı -->
 <div id="silmeModal" class="modal-overlay hidden">
   <div class="modal-box">
     <h3 class="modal-title modal-title-danger">🗑️ Takibi Sonlandır</h3>
@@ -323,6 +373,63 @@
     }
   });
 
+  function formatUyariAc(aciklama) {
+    const guncelYil = new Date().getFullYear();
+    document.getElementById("formatGuncelYil").textContent = guncelYil;
+    document.getElementById("formatUyariMetni").textContent = aciklama;
+    document.getElementById("formatUyariModal").classList.remove("hidden");
+  }
+
+  function formatUyariKapat() {
+    document.getElementById("formatUyariModal").classList.add("hidden");
+  }
+
+  function dosyaFormatiGecerliMi(giris) {
+    const guncelYil = new Date().getFullYear();
+    const temiz = (giris || "").trim();
+
+    if (!temiz) {
+      formatUyariAc("Dosya numarası alanı boş bırakılamaz. Lütfen dosya numaranızı 'dosya no/yıl' formatında girin.");
+      return false;
+    }
+
+    if (!temiz.includes("/")) {
+      formatUyariAc("Dosya numarası ile yıl arasında mutlaka '/' (eğik çizgi) karakteri bulunmalıdır.");
+      return false;
+    }
+
+    const parcalar = temiz.split("/");
+    if (parcalar.length !== 2) {
+      formatUyariAc("Lütfen yalnızca dosya numarası ve yılı arasında tek bir '/' karakteri kullanın (Örn: 12345/2023).");
+      return false;
+    }
+
+    const [dosyaKismi, yilKismi] = parcalar;
+
+    if (!/^\d{1,5}$/.test(dosyaKismi)) {
+      formatUyariAc("Dosya numarası 1 ile 5 basamak arasında yalnızca rakamlardan oluşmalıdır.");
+      return false;
+    }
+
+    if (parseInt(dosyaKismi, 10) <= 0) {
+      formatUyariAc("Dosya numarası 0 olamaz. Lütfen geçerli bir dosya numarası girin.");
+      return false;
+    }
+
+    if (!/^\d{4}$/.test(yilKismi)) {
+      formatUyariAc("Yıl bilgisi mutlaka 4 basamaklı olmalıdır (Örn: 2023).");
+      return false;
+    }
+
+    const yilSayi = parseInt(yilKismi, 10);
+    if (yilSayi < 2010 || yilSayi > guncelYil) {
+      formatUyariAc(`Başvuru yılı 2010 ile ${guncelYil} arasında olmalıdır.`);
+      return false;
+    }
+
+    return true;
+  }
+
   function sekmeAc(ad) {
     document.querySelectorAll(".tab").forEach((t, i) => {
       t.classList.toggle("active", (ad === "sorgu" && i === 0) || (ad === "takip" && i === 1));
@@ -335,7 +442,8 @@
   function bildirimTakibineAktar(dosyaNo) {
     sekmeAc("takip");
     const takipInput = document.getElementById("takipNo");
-    takipInput.value = dosyaNo;
+    const sadeNo = dosyaNo.replace(/\/RD\//i, "/");
+    takipInput.value = sadeNo;
     kvkkOnayAc();
   }
 
@@ -343,9 +451,9 @@
     const temiz = no.trim().toUpperCase();
     const set = new Set([temiz]);
     const m1 = temiz.match(/^(\d+)\s*\/\s*(\d{4})$/);
-    if (m1) set.add(`${m1[1]}/RD/${m1[2]}`);
+    if (m1) set.add(`${parseInt(m1[1], 10)}/RD/${m1[2]}`);
     const m2 = temiz.match(/^(\d+)\s*\/\s*RD\s*\/\s*(\d{4})$/);
-    if (m2) set.add(`${m2[1]}/${m2[2]}`);
+    if (m2) set.add(`${parseInt(m2[1], 10)}/${m2[2]}`);
     return Array.from(set);
   }
 
@@ -388,10 +496,12 @@
   async function dosyaSorgula() {
     const no = document.getElementById("sorguNo").value.trim();
     const kutu = document.getElementById("sorguSonuc");
-    if (!no) {
-      kutu.innerHTML = `<div class="alert alert-err">Lütfen bir dosya numarası girin.</div>`;
+
+    if (!dosyaFormatiGecerliMi(no)) {
+      kutu.innerHTML = "";
       return;
     }
+
     kutu.innerHTML = `<div class="alert alert-warn">⏳ Dosya durumu ve karar listeleri taranıyor...</div>`;
     try {
       const [res, takiptekiKayit] = await Promise.all([
@@ -399,6 +509,12 @@
         dosyaTakipteMi(no)
       ]);
       const data = await res.json();
+      if (!res.ok) {
+        kutu.innerHTML = "";
+        formatUyariAc(data.detail || "Geçersiz dosya numarası formatı.");
+        return;
+      }
+
       const d = data.detay || {};
       const gosterilenNo = d.resmi_no || data.dosya_no || no.toUpperCase();
 
@@ -420,11 +536,15 @@
           <hr class="detay-cizgi" />
         `;
       } else {
+        const uyariNotu = data.gecmis_yil_hatali
+          ? `<div class="detay-satir" style="color:#b91c1c; font-weight:600;">⚠️ Dosya numaranız veya yılı hatalıdır, lütfen kontrol ediniz.</div>`
+          : `<div class="detay-satir" style="color:#64748b;">ℹ️ Bu dosya numarasına ait güncel <em>Stadiu Dosar</em> tablo kaydı bulunamadı.</div>`;
+
         ustBilgiHtml = `
           <div class="detay-baslik">📂 DOSYA BİLGİLERİ</div>
           <div class="detay-no">No: ${gosterilenNo}</div>
           <hr class="detay-cizgi" />
-          <div class="detay-satir" style="color:#64748b;">ℹ️ Bu dosya numarasına ait güncel <em>Stadiu Dosar</em> tablo kaydı bulunamadı.</div>
+          ${uyariNotu}
           <hr class="detay-cizgi" />
         `;
       }
@@ -443,6 +563,12 @@
               ${pdfBtn}
             </div>`;
         }).join("");
+      } else if (data.gecmis_yil_hatali) {
+        kararHtml = `
+          <div class="karar-durum-bekliyor">
+            ⚠️ Dosya numaranız veya yılı hatalıdır, lütfen kontrol ediniz.
+          </div>
+        `;
       } else {
         const guvenliNo = gosterilenNo.replace(/'/g, "\\'");
         const cihazAdi = isMobile ? "bu telefonda" : "bu bilgisayarda";
@@ -483,12 +609,12 @@
     const kutu = document.getElementById("takipSonuc");
 
     if (!no && adminKodu) {
-      bildirimAc();
+      bildirimAc("");
       return;
     }
 
-    if (!no) {
-      kutu.innerHTML = `<div class="alert alert-err">Lütfen takip edilecek dosya numarasını girin.</div>`;
+    if (!dosyaFormatiGecerliMi(no)) {
+      kutu.innerHTML = "";
       return;
     }
 
@@ -512,10 +638,25 @@
 
   function kvkkOnaylaVeBaslat() {
     kvkkKapat();
-    bildirimAc();
+    bildirimAc("");
   }
 
-  async function bildirimAc() {
+  function maddeModalAc(dosyaNo) {
+    document.getElementById("maddeSorulanDosyaNo").textContent = dosyaNo;
+    document.getElementById("maddeSecimModal").classList.remove("hidden");
+  }
+
+  function maddeModalKapat() {
+    document.getElementById("maddeSecimModal").classList.add("hidden");
+    document.getElementById("takipSonuc").innerHTML = "";
+  }
+
+  function maddeSecVeKaydet(secilenMadde) {
+    document.getElementById("maddeSecimModal").classList.add("hidden");
+    bildirimAc(secilenMadde);
+  }
+
+  async function bildirimAc(maddeSecimi = "") {
     const no = document.getElementById("takipNo").value.trim();
     const adminKodu = document.getElementById("adminKodu").value.trim();
     const kutu = document.getElementById("takipSonuc");
@@ -531,7 +672,7 @@
       return;
     }
 
-    kutu.innerHTML = `<div class="alert alert-warn">⏳ Bildirim aboneliği oluşturuluyor...</div>`;
+    kutu.innerHTML = `<div class="alert alert-warn">⏳ Dosya kontrol ediliyor ve bildirim aboneliği hazırlanıyor...</div>`;
 
     try {
       const reg = await navigator.serviceWorker.ready;
@@ -550,17 +691,24 @@
           dosya_no: no,
           subscription: subscription.toJSON(),
           admin_kodu: adminKodu,
-          cihaz_turu: isMobile ? "mobil" : "pc"
+          cihaz_turu: isMobile ? "mobil" : "pc",
+          madde_secimi: maddeSecimi
         })
       });
       const sonuc = await res.json();
       if (res.ok) {
+        if (sonuc.status === "madde_sor") {
+          kutu.innerHTML = "";
+          maddeModalAc(sonuc.dosya_no || no.toUpperCase());
+          return;
+        }
         const alertClass = sonuc.zaten_kayitli ? "alert-warn" : "alert-ok";
         kutu.innerHTML = `<div class="alert ${alertClass}">${sonuc.mesaj}</div>`;
         document.getElementById("takipNo").value = "";
         listeyiYenile();
       } else {
-        kutu.innerHTML = `<div class="alert alert-err">${sonuc.detail || "Kayıt hatası"}</div>`;
+        kutu.innerHTML = "";
+        formatUyariAc(sonuc.detail || "Dosya numaranız veya yılı hatalıdır, lütfen kontrol ediniz.");
       }
     } catch (err) {
       kutu.innerHTML = `<div class="alert alert-err">Hata oluştu: ${err.message}</div>`;
