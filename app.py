@@ -29,11 +29,45 @@ class AbonelikIstegi(BaseModel):
     subscription: dict
     admin_kodu: Optional[str] = ""
     cihaz_turu: Optional[str] = "mobil"
+    madde_secimi: Optional[str] = ""
 
 
 class AbonelikSilIstegi(BaseModel):
     dosya_no: str
     endpoint: str
+
+
+def _dosya_formati_dogrula(temiz_no: str) -> int:
+    """
+    Dosya numarasinin 'dosya no/yıl' kuralina uygunlugunu denetler ve yil bilgisini dondurur:
+    - Dosya no 1-5 basamakli olmali ve 0 olamaz
+    - Arada '/' karakteri bulunmali
+    - Yil 4 basamakli olmali ve 2010 ile guncel yil arasinda olmali
+    """
+    guncel_yil = datetime.now(TSI).year
+    eslesme = re.match(r"^(\d{1,5})/(\d{4})$", temiz_no)
+    if not eslesme:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Geçersiz dosya numarası formatı! Doğru format: dosya no/yıl (Örn: 12345/{guncel_yil}). Dosya no 1-5 basamaklı, yıl 4 basamaklı olmalıdır."
+        )
+
+    dosya_sayi = int(eslesme.group(1))
+    yil_sayi = int(eslesme.group(2))
+
+    if dosya_sayi <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Dosya numarası 0 olamaz! Doğru format: dosya no/yıl (Örn: 12345/{guncel_yil})."
+        )
+
+    if yil_sayi < 2010 or yil_sayi > guncel_yil:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Yıl bilgisi 2010 ile {guncel_yil} arasında olmalıdır! Doğru format: dosya no/yıl (Örn: 12345/{guncel_yil})."
+        )
+
+    return yil_sayi
 
 
 def _dosya_varyasyonlari(temiz_no: str) -> list:
@@ -42,11 +76,13 @@ def _dosya_varyasyonlari(temiz_no: str) -> list:
 
     m1 = re.match(r"^(\d+)\s*/\s*(\d{4})$", temiz_no)
     if m1:
-        varyasyonlar.add(f"{m1.group(1)}/RD/{m1.group(2)}")
+        varyasyonlar.add(f"{int(m1.group(1))}/{m1.group(2)}")
+        varyasyonlar.add(f"{int(m1.group(1))}/RD/{m1.group(2)}")
 
     m2 = re.match(r"^(\d+)\s*/\s*RD\s*/\s*(\d{4})$", temiz_no)
     if m2:
-        varyasyonlar.add(f"{m2.group(1)}/{m2.group(2)}")
+        varyasyonlar.add(f"{int(m2.group(1))}/{m2.group(2)}")
+        varyasyonlar.add(f"{int(m2.group(1))}/RD/{m2.group(2)}")
 
     return list(varyasyonlar)
 
@@ -163,18 +199,14 @@ def _stadiu_detay_analiz_et(temiz_no: str) -> dict:
     return sonuc
 
 
-def _dosya_maddesini_tespit_et(temiz_no: str) -> str:
-    analiz = _stadiu_detay_analiz_et(temiz_no)
-    if analiz["madde"] != "Otomatik":
-        return analiz["madde"]
-
-    if db is not None:
-        aday_numaralar = _dosya_varyasyonlari(temiz_no)
-        if db["kararlar_m11"].find_one(_dinamik_sorgu_olustur("kararlar_m11", aday_numaralar)):
-            return "Madde 11"
-        if db["kararlar_m10"].find_one(_dinamik_sorgu_olustur("kararlar_m10", aday_numaralar)):
-            return "Madde 10"
-
+def _karar_maddesini_bul(temiz_no: str) -> str:
+    if db is None:
+        return "Otomatik"
+    aday_numaralar = _dosya_varyasyonlari(temiz_no)
+    if db["kararlar_m11"].find_one(_dinamik_sorgu_olustur("kararlar_m11", aday_numaralar)):
+        return "Madde 11"
+    if db["kararlar_m10"].find_one(_dinamik_sorgu_olustur("kararlar_m10", aday_numaralar)):
+        return "Madde 10"
     return "Otomatik"
 
 
@@ -208,9 +240,12 @@ async def dosya_sorgula(dosya_no: str):
     if db is None:
         raise HTTPException(status_code=500, detail="Veritabanı bağlantısı yapılandırılmamış.")
 
-    temiz_no = dosya_no.strip()
+    temiz_no = dosya_no.strip().upper()
     if not temiz_no:
-        raise HTTPException(status_code=400, detail="Lütfen geçerli bir dosya numarası girin.")
+        raise HTTPException(status_code=400, detail="Lütfen geçerli bir dosya numarası girin (dosya no/yıl).")
+
+    yil_sayi = _dosya_formati_dogrula(temiz_no)
+    guncel_yil = datetime.now(TSI).year
 
     aday_numaralar = _dosya_varyasyonlari(temiz_no)
     stadiu_detay = _stadiu_detay_analiz_et(temiz_no)
@@ -237,7 +272,7 @@ async def dosya_sorgula(dosya_no: str):
                     pdf_url = v_str
 
             bulunanlar.append({
-                "dosya_no": stadiu_detay["resmi_no"] if stadiu_detay["kayit_var"] else temiz_no.upper(),
+                "dosya_no": stadiu_detay["resmi_no"] if stadiu_detay["kayit_var"] else temiz_no,
                 "madde": madde_adi,
                 "pdf_adi": pdf_adi,
                 "tarih": tarih,
@@ -245,15 +280,18 @@ async def dosya_sorgula(dosya_no: str):
             })
 
     if not bulunanlar:
+        gecmis_yil_hatali = (yil_sayi < guncel_yil and not stadiu_detay["kayit_var"])
         return {
             "bulundu": False,
+            "gecmis_yil_hatali": gecmis_yil_hatali,
             "detay": stadiu_detay,
-            "mesaj": "Dosyanız henüz resmi Karar (Ordin) listelerinde yayımlanmamıştır."
+            "mesaj": "Dosya numaranız veya yılı hatalıdır, lütfen kontrol ediniz." if gecmis_yil_hatali else "Dosyanız henüz resmi Karar (Ordin) listelerinde yayımlanmamıştır."
         }
 
     ilk = bulunanlar[0]
     return {
         "bulundu": True,
+        "gecmis_yil_hatali": False,
         "dosya_no": ilk["dosya_no"],
         "madde": ilk["madde"],
         "pdf_adi": ilk["pdf_adi"],
@@ -293,10 +331,13 @@ async def abone_ol(veri: AbonelikIstegi):
             }},
             upsert=True
         )
-        return {"status": "ok", "mesaj": f"✅ Cihazınız Yönetici (Admin) olarak kaydedildi! Her akşam 20:00 raporu {bu_cihaz} gelecek."}
+        return {"status": "ok", "mesaj": f"✅ Cihazınız Yönetici (Admin) olarak kaydedildi! Her akşam 19:00 raporu {bu_cihaz} gelecek."}
 
     if not temiz_no:
-        raise HTTPException(status_code=400, detail="Lütfen takip edilecek dosya numarasını girin.")
+        raise HTTPException(status_code=400, detail="Lütfen takip edilecek dosya numarasını girin (dosya no/yıl).")
+
+    yil_sayi = _dosya_formati_dogrula(temiz_no)
+    guncel_yil = datetime.now(TSI).year
 
     aday_numaralar = _dosya_varyasyonlari(temiz_no)
 
@@ -327,12 +368,41 @@ async def abone_ol(veri: AbonelikIstegi):
             "mesaj": f"ℹ️ {mevcut_kayit.get('dosya_no', temiz_no)} numaralı dosya zaten {bu_cihazda} bildirim takibinde! Karar çıktığında {cihaz_ek} anında bildirim gelecek."
         }
 
-    tespit_edilen_madde = _dosya_maddesini_tespit_et(temiz_no)
+    stadiu_analiz = _stadiu_detay_analiz_et(temiz_no)
+    tespit_edilen_madde = stadiu_analiz["madde"]
+    if tespit_edilen_madde == "Otomatik":
+        tespit_edilen_madde = _karar_maddesini_bul(temiz_no)
+
+    # Güncel yıl hariç geçmiş yıllara ait dosya Stadiu Dosar'da (ve kararlarda) bulunmuyorsa uyar
+    if yil_sayi < guncel_yil and not stadiu_analiz["kayit_var"] and tespit_edilen_madde == "Otomatik":
+        raise HTTPException(
+            status_code=400,
+            detail="Dosya numaranız veya yılı hatalıdır, lütfen kontrol ediniz."
+        )
+
+    kullanici_secimi = (veri.madde_secimi or "").strip()
+
+    # Güncel yıla ait olup sistemde henüz kaydı yoksa ve kullanıcı henüz seçim yapmadıysa madde sor
+    if tespit_edilen_madde == "Otomatik" and kullanici_secimi not in ["Madde 10", "Madde 11", "Otomatik"]:
+        return {
+            "status": "madde_sor",
+            "dosya_no": temiz_no
+        }
+
+    if tespit_edilen_madde != "Otomatik":
+        son_madde = tespit_edilen_madde
+        madde_bilgi = f" ({son_madde} olarak tespit edildi)"
+    else:
+        son_madde = kullanici_secimi
+        if son_madde in ["Madde 10", "Madde 11"]:
+            madde_bilgi = f" ({son_madde} olarak seçildi)"
+        else:
+            madde_bilgi = " (Madde 10 & 11 Otomatik Tarama)"
 
     yeni_belge = {
         "dosya_no": temiz_no,
         "dosya_varyasyonlari": aday_numaralar,
-        "madde": tespit_edilen_madde,
+        "madde": son_madde,
         "subscription": veri.subscription,
         "is_admin": is_admin,
         "genel_bildirim": True,
@@ -342,7 +412,6 @@ async def abone_ol(veri: AbonelikIstegi):
     }
     db["pwa_abonelikleri"].insert_one(yeni_belge)
 
-    madde_bilgi = f" ({tespit_edilen_madde} olarak tespit edildi)" if tespit_edilen_madde != "Otomatik" else " (Madde 10 & 11 Otomatik Tarama)"
     ek_not = " [Admin Aktif]" if is_admin else ""
     return {
         "status": "ok",
