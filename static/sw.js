@@ -27,6 +27,8 @@ self.addEventListener("push", (event) => {
     body: data.body,
     icon: "/static/icon-192.png",
     badge: "/static/icon-192.png",
+    tag: "anc-bildirim-" + Date.now(),
+    renotify: true,
     vibrate: [200, 100, 200],
     data: {
       url: data.url || "/",
@@ -50,22 +52,28 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  const pdfUrl = event.notification.data.pdf_url;
-  const targetUrl = (event.action === "pdf_indir" && pdfUrl) ? pdfUrl : (pdfUrl || event.notification.data.url || "/");
+  const notifData = event.notification.data || {};
+  const pdfUrl = notifData.pdf_url;
+  const targetUrl = (event.action === "pdf_indir" && pdfUrl)
+    ? pdfUrl
+    : (pdfUrl || notifData.url || "/");
 
   event.waitUntil(
     clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
-      // Dış PDF bağlantısı ise doğrudan yeni sekmede/tarayıcıda indir
+      // Dış PDF bağlantısı ise doğrudan yeni sekmede/tarayıcıda aç
       if (targetUrl.startsWith("http")) {
         return clients.openWindow(targetUrl);
       }
-      // Uygulama içi sayfa ise açık pencereyi odakla veya aç
+
+      // Uygulama içi sayfa ise açık pencereyi güvenle yönlendir ve odakla
       for (const client of clientList) {
-        if ("focus" in client) {
-          client.navigate(targetUrl);
-          return client.focus();
+        if ("navigate" in client && "focus" in client) {
+          return client.navigate(targetUrl)
+            .then((navigatedClient) => (navigatedClient ? navigatedClient.focus() : clients.openWindow(targetUrl)))
+            .catch(() => clients.openWindow(targetUrl));
         }
       }
+
       return clients.openWindow(targetUrl);
     })
   );
