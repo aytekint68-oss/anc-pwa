@@ -518,6 +518,18 @@
       const d = data.detay || {};
       const gosterilenNo = d.resmi_no || data.dosya_no || no.toUpperCase();
 
+      if (!data.bulundu && data.gecmis_yil_hatali) {
+        kutu.innerHTML = `
+          <div class="dosya-detay-kart">
+            <div class="detay-baslik">📂 DOSYA BİLGİLERİ</div>
+            <div class="detay-no">No: ${gosterilenNo}</div>
+            <hr class="detay-cizgi" />
+            <div class="detay-satir" style="color:#b91c1c; font-weight:600;">⚠️ Dosya numaranız veya yılı hatalıdır, lütfen kontrol ediniz.</div>
+          </div>
+        `;
+        return;
+      }
+
       let termenMetni = d.guncel_termen || "-";
       if (d.termen_degisti && d.eski_termen) {
         termenMetni = `<del style="color:#64748b;">${d.eski_termen}</del> &rarr; <strong style="color:#b45309;">${d.guncel_termen}</strong> <span style="font-size:0.75rem; background:#fef3c7; color:#92400e; padding:1px 5px; border-radius:4px;">Güncellendi</span>`;
@@ -536,15 +548,11 @@
           <hr class="detay-cizgi" />
         `;
       } else {
-        const uyariNotu = data.gecmis_yil_hatali
-          ? `<div class="detay-satir" style="color:#b91c1c; font-weight:600;">⚠️ Dosya numaranız veya yılı hatalıdır, lütfen kontrol ediniz.</div>`
-          : `<div class="detay-satir" style="color:#64748b;">ℹ️ Bu dosya numarasına ait güncel <em>Stadiu Dosar</em> tablo kaydı bulunamadı.</div>`;
-
         ustBilgiHtml = `
           <div class="detay-baslik">📂 DOSYA BİLGİLERİ</div>
           <div class="detay-no">No: ${gosterilenNo}</div>
           <hr class="detay-cizgi" />
-          ${uyariNotu}
+          <div class="detay-satir" style="color:#64748b;">ℹ️ Bu dosya numarasına ait güncel <em>Stadiu Dosar</em> tablo kaydı bulunamadı.</div>
           <hr class="detay-cizgi" />
         `;
       }
@@ -563,12 +571,6 @@
               ${pdfBtn}
             </div>`;
         }).join("");
-      } else if (data.gecmis_yil_hatali) {
-        kararHtml = `
-          <div class="karar-durum-bekliyor">
-            ⚠️ Dosya numaranız veya yılı hatalıdır, lütfen kontrol ediniz.
-          </div>
-        `;
       } else {
         const guvenliNo = gosterilenNo.replace(/'/g, "\\'");
         const cihazAdi = isMobile ? "bu telefonda" : "bu bilgisayarda";
