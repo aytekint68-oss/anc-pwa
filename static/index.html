@@ -281,7 +281,7 @@
     <div class="format-ornek-kutu">
       <strong>✅ Doğru Format:</strong> <code>dosya no/yıl</code><br/>
       <strong>Örnek:</strong> <code>12345/2023</code><br/>
-      <small>• Dosya no 1–5 basamaklı olmalı ve 0 olamaz.<br/>
+      <small>• Dosya no 1–6 basamaklı olmalı ve 0 olamaz.<br/>
       • Yıl 4 basamaklı olmalı (2010–<span id="formatGuncelYil"></span>).</small>
     </div>
     <div class="modal-actions">
@@ -406,8 +406,8 @@
 
     const [dosyaKismi, yilKismi] = parcalar;
 
-    if (!/^\d{1,5}$/.test(dosyaKismi)) {
-      formatUyariAc("Dosya numarası 1 ile 5 basamak arasında yalnızca rakamlardan oluşmalıdır.");
+    if (!/^\d{1,6}$/.test(dosyaKismi)) {
+      formatUyariAc("Dosya numarası 1 ile 6 basamak arasında yalnızca rakamlardan oluşmalıdır.");
       return false;
     }
 
